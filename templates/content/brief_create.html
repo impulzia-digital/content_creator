@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Nuevo brief{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Nuevo brief</h1>
+
+<form method="post" class="bg-white rounded-xl shadow p-6 max-w-2xl space-y-5">
+  {% csrf_token %}
+
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Título</label>
+    <input type="text" name="title" required maxlength="300"
+      class="w-full rounded-lg border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+      placeholder="Ej: 5 errores comunes en Python">
+  </div>
+
+  <div>
+    <label class="block text-sm font-medium text-gray-700 mb-1">Idea / Descripción</label>
+    <textarea name="raw_idea" rows="4" required
+      class="w-full rounded-lg border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"
+      placeholder="Describe tu idea de contenido..."></textarea>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contenido</label>
+      <select name="content_type" class="w-full rounded-lg border-gray-300">
+        {% for val, label in type_choices %}
+          <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Aspecto</label>
+      <select name="aspect_ratio" class="w-full rounded-lg border-gray-300">
+        <option value="4:5" selected>4:5 (Feed)</option>
+        <option value="1:1">1:1 (Cuadrado)</option>
+        <option value="9:16">9:16 (Reel/Story)</option>
+        <option value="16:9">16:9 (Landscape)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-2 gap-4">
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Nº de slides (carrusel)</label>
+      <input type="number" name="num_slides" value="1" min="1" max="10"
+        class="w-full rounded-lg border-gray-300">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Prioridad (1-10)</label>
+      <input type="number" name="priority" value="5" min="1" max="10"
+        class="w-full rounded-lg border-gray-300">
+    </div>
+  </div>
+
+  <div class="pt-2">
+    <button type="submit" class="bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 font-medium">
+      Crear brief
+    </button>
+    <a href="{% url 'content:brief_list' %}" class="ml-3 text-sm text-gray-500 hover:text-gray-700">Cancelar</a>
+  </div>
+</form>
+{% endblock %}

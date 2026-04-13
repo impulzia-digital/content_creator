@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Mis marcas{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Mis marcas</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+  {% for m in memberships %}
+  <a href="{% url 'brands:brand_switch' m.brand.slug %}"
+     class="block bg-white rounded-xl shadow hover:shadow-lg transition p-6">
+    <div class="flex items-center gap-4">
+      {% if m.brand.logo_url %}
+        <img src="{{ m.brand.logo_url }}" alt="{{ m.brand.name }}" class="w-12 h-12 rounded-full object-cover">
+      {% else %}
+        <div class="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-lg">
+          {{ m.brand.name|first }}
+        </div>
+      {% endif %}
+      <div>
+        <p class="font-semibold text-gray-900">{{ m.brand.name }}</p>
+        <p class="text-xs text-gray-500">{{ m.get_role_display }} · {{ m.brand.industry }}</p>
+      </div>
+    </div>
+  </a>
+  {% empty %}
+  <p class="text-gray-400 col-span-3 text-center py-12">No tienes marcas asignadas.</p>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Revisar aprobación{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-gray-900 mb-6">Revisar aprobación</h1>
+
+<div class="bg-white rounded-xl shadow p-6 max-w-3xl">
+  <div class="mb-4">
+    <p class="text-sm text-gray-500">Brief</p>
+    <a href="{% url 'content:brief_detail' approval.variant.brief.pk %}"
+      class="font-semibold text-indigo-600 hover:underline">{{ approval.variant.brief.title }}</a>
+  </div>
+
+  {% if approval.variant.caption %}
+  <div class="mb-4">
+    <p class="text-sm text-gray-500">Caption (v{{ approval.variant.version }})</p>
+    <p class="text-gray-800 whitespace-pre-line mt-1">{{ approval.variant.caption }}</p>
+  </div>
+  {% endif %}
+
+  {% if approval.variant.assets.all %}
+  <div class="flex gap-2 mb-4 overflow-x-auto">
+    {% for asset in approval.variant.assets.all %}
+      {% if asset.asset_type == 'image' %}
+        <img src="{{ asset.file_url }}" class="h-48 rounded-lg object-cover">
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" class="border-t pt-4 mt-4 space-y-4">
+    {% csrf_token %}
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Decisión</label>
+      <div class="flex gap-3">
+        <label class="flex items-center gap-1.5">
+          <input type="radio" name="decision" value="approved" class="text-green-600">
+          <span class="text-sm">Aprobar</span>
+        </label>
+        <label class="flex items-center gap-1.5">
+          <input type="radio" name="decision" value="changes_requested" class="text-yellow-600">
+          <span class="text-sm">Pedir cambios</span>
+        </label>
+        <label class="flex items-center gap-1.5">
+          <input type="radio" name="decision" value="rejected" class="text-red-600">
+          <span class="text-sm">Rechazar</span>
+        </label>
+      </div>
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-gray-700 mb-1">Notas / Feedback</label>
+      <textarea name="notes" rows="3"
+        class="w-full rounded-lg border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500"></textarea>
+    </div>
+    <button type="submit" class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 font-medium text-sm">
+      Enviar decisión
+    </button>
+  </form>
+</div>
+{% endblock %}

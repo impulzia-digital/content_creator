@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-gray-50">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Contenido IG{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <meta name="htmx-config" content='{"defaultSwapStyle":"innerHTML"}'>
+</head>
+<body class="h-full" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+
+  {# ── Navbar ─────────────────────────────────────── #}
+  <nav class="bg-indigo-700 text-white shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
+      <a href="{% url 'brands:dashboard' %}" class="font-bold text-lg tracking-tight">📸 Contenido IG</a>
+      <div class="flex items-center gap-6 text-sm">
+        {% if request.brand %}
+          <span class="bg-indigo-900/40 px-3 py-1 rounded-full">{{ request.brand.name }}</span>
+        {% endif %}
+        <a href="{% url 'content:brief_list' %}" class="hover:text-indigo-200">Briefs</a>
+        <a href="{% url 'approvals:approval_list' %}" class="hover:text-indigo-200">Aprobaciones</a>
+        <a href="{% url 'publishing:schedule_list' %}" class="hover:text-indigo-200">Publicaciones</a>
+        <a href="{% url 'brands:brand_list' %}" class="hover:text-indigo-200">Marcas</a>
+        {% if user.is_staff %}
+          <a href="{% url 'admin:index' %}" class="hover:text-indigo-200">Admin</a>
+        {% endif %}
+        {% if user.is_authenticated %}
+          <span class="text-indigo-200">{{ user.username }}</span>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  {# ── Messages ───────────────────────────────────── #}
+  {% if messages %}
+    <div class="max-w-7xl mx-auto px-4 mt-4 space-y-2">
+      {% for msg in messages %}
+        <div class="p-3 rounded-lg text-sm
+          {% if msg.tags == 'error' %}bg-red-100 text-red-800
+          {% elif msg.tags == 'success' %}bg-green-100 text-green-800
+          {% else %}bg-blue-100 text-blue-800{% endif %}">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {# ── Content ────────────────────────────────────── #}
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
+</body>
+</html>

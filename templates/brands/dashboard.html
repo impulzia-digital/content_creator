@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — {{ brand.name }}{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+  <h1 class="text-2xl font-bold text-gray-900">Dashboard — {{ brand.name }}</h1>
+</div>
+
+{# ── KPI cards ──────────────────────────────────── #}
+<div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+  <div class="bg-white rounded-xl shadow p-4 text-center">
+    <p class="text-3xl font-bold text-indigo-600">{{ total_briefs }}</p>
+    <p class="text-xs text-gray-500 mt-1">Total Briefs</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4 text-center">
+    <p class="text-3xl font-bold text-gray-500">{{ draft_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">Borradores</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4 text-center">
+    <p class="text-3xl font-bold text-yellow-500">{{ generating_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">Generando</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4 text-center">
+    <p class="text-3xl font-bold text-blue-500">{{ review_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">En revisión</p>
+  </div>
+  <div class="bg-white rounded-xl shadow p-4 text-center">
+    <p class="text-3xl font-bold text-green-600">{{ published_count }}</p>
+    <p class="text-xs text-gray-500 mt-1">Publicados</p>
+  </div>
+</div>
+
+{# ── Recent briefs ─────────────────────────────── #}
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+    <h2 class="font-semibold text-gray-800">Briefs recientes</h2>
+    <a href="{% url 'content:brief_create' %}" class="bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-indigo-700">+ Nuevo brief</a>
+  </div>
+  <table class="min-w-full divide-y divide-gray-200 text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left text-gray-500">Título</th>
+        <th class="px-4 py-2 text-left text-gray-500">Tipo</th>
+        <th class="px-4 py-2 text-left text-gray-500">Estado</th>
+        <th class="px-4 py-2 text-left text-gray-500">Fecha</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for brief in recent_briefs %}
+      <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.href='{% url 'content:brief_detail' brief.pk %}'">
+        <td class="px-4 py-3 font-medium text-gray-900">{{ brief.title }}</td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700">{{ brief.get_content_type_display }}</span>
+        </td>
+        <td class="px-4 py-3">
+          <span class="px-2 py-0.5 rounded-full text-xs
+            {% if brief.status == 'published' %}bg-green-100 text-green-700
+            {% elif brief.status == 'failed' %}bg-red-100 text-red-700
+            {% elif brief.status == 'review' %}bg-blue-100 text-blue-700
+            {% elif brief.status == 'generating' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-gray-100 text-gray-600{% endif %}">
+            {{ brief.get_status_display }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-gray-500">{{ brief.created_at|date:"d M Y H:i" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="px-4 py-6 text-center text-gray-400">No hay briefs aún. ¡Crea el primero!</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

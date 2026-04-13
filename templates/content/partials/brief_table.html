@@ -1,0 +1,35 @@
+<table class="min-w-full divide-y divide-gray-200 text-sm bg-white rounded-xl shadow overflow-hidden">
+  <thead class="bg-gray-50">
+    <tr>
+      <th class="px-4 py-2 text-left text-gray-500">Título</th>
+      <th class="px-4 py-2 text-left text-gray-500">Tipo</th>
+      <th class="px-4 py-2 text-left text-gray-500">Estado</th>
+      <th class="px-4 py-2 text-left text-gray-500">Prioridad</th>
+      <th class="px-4 py-2 text-left text-gray-500">Fecha</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-gray-100">
+    {% for brief in briefs %}
+    <tr class="hover:bg-gray-50 cursor-pointer" onclick="location.href='{% url 'content:brief_detail' brief.pk %}'">
+      <td class="px-4 py-3 font-medium text-gray-900">{{ brief.title }}</td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700">{{ brief.get_content_type_display }}</span>
+      </td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs
+          {% if brief.status == 'published' %}bg-green-100 text-green-700
+          {% elif brief.status == 'failed' %}bg-red-100 text-red-700
+          {% elif brief.status == 'review' %}bg-blue-100 text-blue-700
+          {% elif brief.status == 'generating' %}bg-yellow-100 text-yellow-700
+          {% else %}bg-gray-100 text-gray-600{% endif %}">
+          {{ brief.get_status_display }}
+        </span>
+      </td>
+      <td class="px-4 py-3 text-gray-500">{{ brief.priority }}</td>
+      <td class="px-4 py-3 text-gray-500">{{ brief.created_at|date:"d M H:i" }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">Sin resultados.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

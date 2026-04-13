@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Briefs — {{ request.brand.name }}{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold text-gray-900">Briefs</h1>
+  <a href="{% url 'content:brief_create' %}" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">+ Nuevo brief</a>
+</div>
+
+{# ── Filtros HTMX ─────────────────────────────── #}
+<div class="flex gap-3 mb-4 text-sm">
+  <select hx-get="{% url 'content:brief_list' %}" hx-target="#brief-table" hx-include="[name='type']"
+    name="status" class="rounded border-gray-300 px-3 py-1.5">
+    <option value="">Todos los estados</option>
+    {% for val, label in status_choices %}
+      <option value="{{ val }}" {% if current_status == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <select hx-get="{% url 'content:brief_list' %}" hx-target="#brief-table" hx-include="[name='status']"
+    name="type" class="rounded border-gray-300 px-3 py-1.5">
+    <option value="">Todos los tipos</option>
+    {% for val, label in type_choices %}
+      <option value="{{ val }}" {% if current_type == val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+</div>
+
+<div id="brief-table">
+  {% include "content/partials/brief_table.html" %}
+</div>
+{% endblock %}

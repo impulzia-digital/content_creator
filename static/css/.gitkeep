@@ -1,0 +1,2 @@
+/* Tailwind se carga desde CDN en desarrollo.
+   Para producción, compilar con: npx tailwindcss -o static/css/output.css --minify */

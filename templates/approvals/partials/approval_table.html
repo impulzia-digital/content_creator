@@ -1,0 +1,30 @@
+<table class="min-w-full divide-y divide-gray-200 text-sm bg-white rounded-xl shadow overflow-hidden">
+  <thead class="bg-gray-50">
+    <tr>
+      <th class="px-4 py-2 text-left text-gray-500">Brief</th>
+      <th class="px-4 py-2 text-left text-gray-500">Variante</th>
+      <th class="px-4 py-2 text-left text-gray-500">Estado</th>
+      <th class="px-4 py-2 text-left text-gray-500">Solicitada</th>
+      <th class="px-4 py-2 text-left text-gray-500">Acción</th>
+    </tr>
+  </thead>
+  <tbody class="divide-y divide-gray-100">
+    {% for a in approvals %}
+    <tr>
+      <td class="px-4 py-3 font-medium">
+        <a href="{% url 'content:brief_detail' a.variant.brief.pk %}" class="text-indigo-600 hover:underline">{{ a.variant.brief.title }}</a>
+      </td>
+      <td class="px-4 py-3 text-gray-600">v{{ a.variant.version }}</td>
+      <td class="px-4 py-3">
+        <span class="px-2 py-0.5 rounded-full text-xs bg-yellow-100 text-yellow-700">{{ a.get_decision_display }}</span>
+      </td>
+      <td class="px-4 py-3 text-gray-500">{{ a.created_at|date:"d M H:i" }}</td>
+      <td class="px-4 py-3">
+        <a href="{% url 'approvals:approval_decide' a.pk %}" class="text-indigo-600 hover:underline text-sm">Revisar</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">No hay aprobaciones pendientes 🎉</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

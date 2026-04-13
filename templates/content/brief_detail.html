@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}{{ brief.title }}{% endblock %}
+
+{% block content %}
+{# ── Header ───────────────────────────────────── #}
+<div class="flex items-start justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">{{ brief.title }}</h1>
+    <p class="text-sm text-gray-500 mt-1">
+      <span class="px-2 py-0.5 rounded-full text-xs bg-indigo-100 text-indigo-700">{{ brief.get_content_type_display }}</span>
+      <span class="px-2 py-0.5 rounded-full text-xs
+        {% if brief.status == 'published' %}bg-green-100 text-green-700
+        {% elif brief.status == 'failed' %}bg-red-100 text-red-700
+        {% elif brief.status == 'review' %}bg-blue-100 text-blue-700
+        {% elif brief.status == 'generating' %}bg-yellow-100 text-yellow-700
+        {% else %}bg-gray-100 text-gray-600{% endif %}">
+        {{ brief.get_status_display }}
+      </span>
+      · {{ brief.created_at|date:"d M Y H:i" }}
+    </p>
+  </div>
+  <div class="flex gap-2" id="actions">
+    {% if brief.status == 'draft' or brief.status == 'failed' %}
+      <button hx-post="{% url 'content:brief_generate' brief.pk %}" hx-target="#actions" hx-swap="innerHTML"
+        class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">
+        🚀 Generar contenido
+      </button>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Idea original ────────────────────────────── #}
+<div class="bg-white rounded-xl shadow p-5 mb-6">
+  <h2 class="font-semibold text-gray-800 mb-2">Idea original</h2>
+  <p class="text-gray-700 whitespace-pre-line">{{ brief.raw_idea }}</p>
+</div>
+
+{# ── Enriched brief ───────────────────────────── #}
+{% if brief.enriched_brief %}
+<div class="bg-white rounded-xl shadow p-5 mb-6">
+  <h2 class="font-semibold text-gray-800 mb-2">Brief enriquecido</h2>
+  <dl class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+    {% for key, value in brief.enriched_brief.items %}
+    <dt class="text-gray-500 font-medium">{{ key }}</dt>
+    <dd class="text-gray-800">
+      {% if value|length > 0 %}
+        {% if value.0 %}{{ value|join:", " }}{% else %}{{ value }}{% endif %}
+      {% else %}{{ value }}{% endif %}
+    </dd>
+    {% endfor %}
+  </dl>
+</div>
+{% endif %}
+
+{# ── Error ─────────────────────────────────────── #}
+{% if brief.error_message %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+  <p class="text-red-800 text-sm font-medium">Error:</p>
+  <p class="text-red-700 text-sm mt-1">{{ brief.error_message }}</p>
+</div>
+{% endif %}
+
+{# ── Variantes ─────────────────────────────────── #}
+<h2 class="text-lg font-semibold text-gray-800 mb-4">Variantes generadas</h2>
+<div class="space-y-4 mb-8">
+  {% for variant in variants %}
+  <div class="bg-white rounded-xl shadow p-5 {% if variant.is_selected %}ring-2 ring-indigo-500{% endif %}">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="font-medium text-gray-900">Variante v{{ variant.version }}
+        {% if variant.is_selected %}<span class="text-indigo-600 text-xs ml-2">✓ Seleccionada</span>{% endif %}
+      </h3>
+      <div class="flex gap-2 text-sm">
+        {% if not variant.is_selected %}
+          <button hx-post="{% url 'content:variant_select' variant.pk %}" hx-swap="outerHTML"
+            class="text-indigo-600 hover:underline">Seleccionar</button>
+        {% endif %}
+        {% if brief.status == 'approved' or brief.status == 'review' %}
+          <a href="{% url 'publishing:schedule_create' variant.pk %}"
+            class="text-blue-600 hover:underline">Programar</a>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if variant.caption %}
+    <p class="text-gray-700 text-sm whitespace-pre-line mb-2">{{ variant.caption }}</p>
+    {% endif %}
+
+    {% if variant.hashtags %}
+    <p class="text-xs text-indigo-500">{{ variant.hashtags|join:" " }}</p>
+    {% endif %}
+
+    {# Assets #}
+    {% if variant.assets.all %}
+    <div class="flex gap-2 mt-3 overflow-x-auto">
+      {% for asset in variant.assets.all %}
+        {% if asset.asset_type == 'image' %}
+          <img src="{{ asset.file_url }}" alt="{{ variant.alt_text }}"
+            class="h-32 rounded-lg object-cover flex-shrink-0">
+        {% elif asset.asset_type == 'video' %}
+          <video src="{{ asset.file_url }}" class="h-32 rounded-lg flex-shrink-0" controls></video>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <p class="text-xs text-gray-400 mt-2">Costo: ${{ variant.generation_cost_usd }}</p>
+  </div>
+  {% empty %}
+  <p class="text-gray-400 text-center py-8">No hay variantes generadas aún.</p>
+  {% endfor %}
+</div>
+
+{# ── Agent runs ────────────────────────────────── #}
+<h2 class="text-lg font-semibold text-gray-800 mb-4">Ejecuciones de agentes</h2>
+<div class="bg-white rounded-xl shadow overflow-hidden">
+  <table class="min-w-full divide-y divide-gray-200 text-sm">
+    <thead class="bg-gray-50">
+      <tr>
+        <th class="px-4 py-2 text-left text-gray-500">Agente</th>
+        <th class="px-4 py-2 text-left text-gray-500">Estado</th>
+        <th class="px-4 py-2 text-left text-gray-500">Duración</th>
+        <th class="px-4 py-2 text-left text-gray-500">Costo</th>
+        <th class="px-4 py-2 text-left text-gray-500">Modelo</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-100">
+      {% for run in runs %}
+      <tr>
+        <td class="px-4 py-2 font-medium text-gray-900">{{ run.get_agent_type_display }}</td>
+        <td class="px-4 py-2">
+          <span class="px-2 py-0.5 rounded-full text-xs
+            {% if run.status == 'success' %}bg-green-100 text-green-700
+            {% elif run.status == 'failed' %}bg-red-100 text-red-700
+            {% elif run.status == 'running' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-gray-100 text-gray-600{% endif %}">
+            {{ run.get_status_display }}
+          </span>
+        </td>
+        <td class="px-4 py-2 text-gray-500">{% if run.duration_seconds %}{{ run.duration_seconds|floatformat:1 }}s{% else %}—{% endif %}</td>
+        <td class="px-4 py-2 text-gray-500">${{ run.cost_usd }}</td>
+        <td class="px-4 py-2 text-gray-500">{{ run.model_used|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-4 py-4 text-center text-gray-400">Sin ejecuciones.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

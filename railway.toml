@@ -1,0 +1,19 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[[services]]
+name = "web"
+startCommand = "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120"
+healthcheckPath = "/health/"
+
+[services.envs]
+DJANGO_SETTINGS_MODULE = "config.settings.production"
+
+[[services]]
+name = "worker"
+startCommand = "celery -A config worker -l info -Q default,generation -c 2"
+
+[[services]]
+name = "beat"
+startCommand = "celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
