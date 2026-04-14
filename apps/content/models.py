@@ -44,6 +44,12 @@ class ContentBrief(TimeStampedModel):
 
     # Brief input
     title = models.CharField(max_length=300)
+    seed_key = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="Clave estable para sincronizar briefs versionados desde seed data",
+    )
     raw_idea = models.TextField(
         help_text="Idea cruda tal como la escribe el usuario o viene del spreadsheet"
     )
@@ -80,6 +86,13 @@ class ContentBrief(TimeStampedModel):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["brand", "seed_key"],
+                condition=models.Q(seed_key__isnull=False) & ~models.Q(seed_key=""),
+                name="content_brief_seed_key_unique",
+            ),
+        ]
         indexes = [
             models.Index(fields=["brand", "status"]),
             models.Index(fields=["scheduled_for"]),

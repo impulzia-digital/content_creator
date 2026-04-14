@@ -110,6 +110,10 @@ Genera la estructura del carrusel en JSON:
                 )
             )
             total_cost += image_response.cost_usd
+            image_width = image_response.width or 1080
+            image_height = image_response.height or 1350
+            content_type = image_response.content_type or "image/jpeg"
+            images_created_for_slide = 0
 
             # Subir a S3
             for url in image_response.image_urls:
@@ -117,7 +121,7 @@ Genera la estructura del carrusel en JSON:
                     f"brands/{context.brand.slug}/content/{context.brief.id}/"
                     f"carousel_{slide['slide_number']:02d}_{uuid.uuid4().hex[:8]}.jpg"
                 )
-                upload = await storage.upload_from_url(url, key, "image/jpeg")
+                upload = await storage.upload_from_url(url, key, content_type)
 
                 if context.variant:
                     asset = Asset(
@@ -127,9 +131,9 @@ Genera la estructura del carrusel en JSON:
                         file_url=upload.url,
                         file_key=upload.key,
                         file_size_bytes=upload.size_bytes,
-                        mime_type="image/jpeg",
-                        width=1080,
-                        height=1350,
+                        mime_type=content_type,
+                        width=image_width,
+                        height=image_height,
                         position=slide["slide_number"] - 1,
                         generation_prompt=visual_prompt,
                         generation_params=slide,
@@ -140,6 +144,42 @@ Genera la estructura del carrusel en JSON:
                         "url": upload.url,
                         "key": upload.key,
                     })
+                    images_created_for_slide += 1
+
+            for image_data in image_response.image_bytes:
+                key = (
+                    f"brands/{context.brand.slug}/content/{context.brief.id}/"
+                    f"carousel_{slide['slide_number']:02d}_{uuid.uuid4().hex[:8]}.jpg"
+                )
+                upload = await storage.upload_bytes(image_data, key, content_type)
+
+                if context.variant:
+                    asset = Asset(
+                        variant=context.variant,
+                        asset_type=Asset.AssetType.IMAGE,
+                        source=Asset.Source.GENERATED,
+                        file_url=upload.url,
+                        file_key=upload.key,
+                        file_size_bytes=upload.size_bytes,
+                        mime_type=content_type,
+                        width=image_width,
+                        height=image_height,
+                        position=slide["slide_number"] - 1,
+                        generation_prompt=visual_prompt,
+                        generation_params=slide,
+                    )
+                    await asset.asave()
+                    assets_created.append({
+                        "slide": slide["slide_number"],
+                        "url": upload.url,
+                        "key": upload.key,
+                    })
+                    images_created_for_slide += 1
+
+            if images_created_for_slide == 0:
+                raise ValueError(
+                    f"El proveedor de imagen no devolvio imagenes para el slide {slide['slide_number']}"
+                )
 
         return AgentResult(
             success=True,

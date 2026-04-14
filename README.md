@@ -41,10 +41,16 @@ cp .env.example .env
 # 3. Levantar con Docker (web + worker + beat + ngrok)
 docker compose up --build
 
-# 4. Crear superusuario
+# 4. Definir la clave del usuario seed en .env
+# SEED_OWNER_PASSWORD=change-me
+
+# 5. Cargar la seed versionada del negocio
+docker compose exec web python manage.py seed_business_data
+
+# 6. Si no querés usar el usuario seed, crear superusuario manual
 docker compose exec web python manage.py createsuperuser
 
-# 5. Acceder
+# 7. Acceder
 # http://localhost:8000/admin/
 # http://localhost:8000/
 # http://localhost:4040/  (inspector local de ngrok)
@@ -55,6 +61,25 @@ docker compose exec web python manage.py createsuperuser
 ```bash
 docker compose exec web pytest -x -v
 ```
+
+## Seed versionada
+
+El repo ahora puede cargar configuración base del negocio y briefs iniciales desde `seed_data/`.
+
+- `brand.json`: identidad, tono, paleta y defaults editoriales.
+- `users.json`: usuarios mínimos para entrar al backoffice.
+- `memberships.json`: vínculo usuario ↔ marca.
+- `instagram_accounts.json`: opcional; puede ir vacío si todavía no conectaste Meta.
+- `briefs.json`: backlog inicial de `ContentBrief` versionado en Git.
+
+Comandos:
+
+```bash
+docker compose exec web python manage.py seed_business_data
+docker compose exec web python manage.py seed_business_data --dry-run
+```
+
+No guardes tokens ni passwords reales en `seed_data/`. Para valores sensibles usá `password_env` o `access_token_env` y definí esas variables en `.env`.
 
 ## Deploy (Railway)
 

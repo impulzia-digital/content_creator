@@ -52,5 +52,25 @@ class Asset(TimeStampedModel):
     class Meta:
         ordering = ["variant", "position"]
 
+    @property
+    def public_url(self) -> str:
+        if not self.file_key:
+            return self.file_url
+
+        from django.conf import settings
+
+        from apps.integrations.providers.storage_s3 import (
+            build_presigned_storage_url,
+            build_public_storage_url,
+        )
+
+        if getattr(settings, "AWS_S3_CUSTOM_DOMAIN", "").strip():
+            return build_public_storage_url(self.file_key)
+
+        if getattr(settings, "USE_S3", False):
+            return build_presigned_storage_url(self.file_key)
+
+        return self.file_url
+
     def __str__(self):
         return f"{self.get_asset_type_display()} #{self.position} — {self.variant}"

@@ -1,6 +1,7 @@
 """Tests para apps.content — ContentBrief, ContentVariant, AgentRun."""
 
 import pytest
+from django.template import Context, Template
 from django.utils import timezone
 
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
@@ -41,6 +42,7 @@ class TestContentBrief:
         assert brief.num_slides == 1
         assert brief.tags == []
         assert brief.enriched_brief is None
+        assert brief.seed_key is None
         assert brief.scheduled_for is None
 
     def test_brief_enriched_brief_json(self, enriched_brief):
@@ -56,6 +58,26 @@ class TestContentBrief:
         b2 = ContentBrief.objects.create(brand=brand, title="B", raw_idea="b", created_by=user)
         briefs = list(ContentBrief.objects.all())
         assert briefs[0] == b2  # Más reciente primero
+
+    def test_brief_seed_key_unique_per_brand(self, brand, user):
+        from django.db import IntegrityError
+
+        ContentBrief.objects.create(
+            brand=brand,
+            created_by=user,
+            title="Primero",
+            seed_key="hero-post",
+            raw_idea="uno",
+        )
+
+        with pytest.raises(IntegrityError):
+            ContentBrief.objects.create(
+                brand=brand,
+                created_by=user,
+                title="Duplicado",
+                seed_key="hero-post",
+                raw_idea="dos",
+            )
 
 
 @pytest.mark.django_db
@@ -162,3 +184,23 @@ class TestAgentRun:
         AgentRun.objects.create(brief=brief, agent_type=AgentRun.AgentType.COPY)
         AgentRun.objects.create(brief=brief, agent_type=AgentRun.AgentType.IMAGE)
         assert brief.agent_runs.count() == 3
+
+
+class TestContentTemplateFilters:
+    def test_is_list_filter_does_not_split_strings(self):
+        template = Template(
+            "{% load content_extras %}{% if value|is_list %}{{ value|join:', ' }}{% else %}{{ value }}{% endif %}"
+        )
+
+        rendered = template.render(Context({"value": "Presentación de Impulzia"}))
+
+        assert rendered == "Presentación de Impulzia"
+
+    def test_is_list_filter_joins_lists(self):
+        template = Template(
+            "{% load content_extras %}{% if value|is_list %}{{ value|join:', ' }}{% else %}{{ value }}{% endif %}"
+        )
+
+        rendered = template.render(Context({"value": ["uno", "dos"]}))
+
+        assert rendered == "uno, dos"

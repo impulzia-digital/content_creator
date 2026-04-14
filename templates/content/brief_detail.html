@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load content_extras %}
 {% block title %}{{ brief.title }}{% endblock %}
 
 {% block content %}
@@ -43,9 +44,7 @@
     {% for key, value in brief.enriched_brief.items %}
     <dt class="text-gray-500 font-medium">{{ key }}</dt>
     <dd class="text-gray-800">
-      {% if value|length > 0 %}
-        {% if value.0 %}{{ value|join:", " }}{% else %}{{ value }}{% endif %}
-      {% else %}{{ value }}{% endif %}
+      {% if value|is_list %}{{ value|join:", " }}{% else %}{{ value }}{% endif %}
     </dd>
     {% endfor %}
   </dl>
@@ -94,10 +93,10 @@
     <div class="flex gap-2 mt-3 overflow-x-auto">
       {% for asset in variant.assets.all %}
         {% if asset.asset_type == 'image' %}
-          <img src="{{ asset.file_url }}" alt="{{ variant.alt_text }}"
+          <img src="{% url 'assets:serve_asset' asset.file_key %}" alt="{{ variant.alt_text }}"
             class="h-32 rounded-lg object-cover flex-shrink-0">
         {% elif asset.asset_type == 'video' %}
-          <video src="{{ asset.file_url }}" class="h-32 rounded-lg flex-shrink-0" controls></video>
+          <video src="{% url 'assets:serve_asset' asset.file_key %}" class="h-32 rounded-lg flex-shrink-0" controls></video>
         {% endif %}
       {% endfor %}
     </div>

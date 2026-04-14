@@ -1,0 +1,12 @@
+[
+  {
+    "username": "owner",
+    "email": "owner@impulzia.local",
+    "first_name": "Owner",
+    "last_name": "Impulzia",
+    "is_staff": true,
+    "is_superuser": true,
+    "is_active": true,
+    "password_env": "SEED_OWNER_PASSWORD"
+  }
+]

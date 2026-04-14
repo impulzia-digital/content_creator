@@ -49,7 +49,8 @@ class ContentOrchestrator:
 
         # Actualizar status
         brief.status = ContentBrief.Status.GENERATING
-        await brief.asave(update_fields=["status"])
+        brief.error_message = ""
+        await brief.asave(update_fields=["status", "error_message"])
 
         try:
             # Paso 1: Enriquecer brief
@@ -61,7 +62,7 @@ class ContentOrchestrator:
                 return self._build_summary(results)
 
             # Paso 2: Crear variante
-            variant = await ContentVariant.objects.acreate(
+            variant, _ = await ContentVariant.objects.aget_or_create(
                 brief=brief,
                 version=1,
             )
@@ -78,9 +79,18 @@ class ContentOrchestrator:
             elif content_type == ContentBrief.ContentType.STORY:
                 results.update(await self._pipeline_story(context))
 
+            if not all(result.success for result in results.values()):
+                first_error = next(
+                    (result.error for result in results.values() if not result.success and result.error),
+                    "La generación falló en uno o más agentes",
+                )
+                await self._mark_failed(brief, first_error)
+                return self._build_summary(results)
+
             # Paso 4: Marcar como review
             brief.status = ContentBrief.Status.REVIEW
-            await brief.asave(update_fields=["status"])
+            brief.error_message = ""
+            await brief.asave(update_fields=["status", "error_message"])
 
             # Seleccionar variante
             variant.is_selected = True
@@ -88,6 +98,7 @@ class ContentOrchestrator:
 
         except Exception as exc:
             logger.exception("Orchestrator falló para brief %s: %s", brief.id, exc)
+            results["orchestrator"] = AgentResult(success=False, error=str(exc))
             await self._mark_failed(brief, str(exc))
 
         return self._build_summary(results)

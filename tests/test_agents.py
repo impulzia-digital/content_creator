@@ -284,6 +284,8 @@ class TestImageAgent:
             image_urls=["https://oai.example.com/generated.jpg"],
             model="gpt-image-1",
             cost_usd=0.04,
+            width=1024,
+            height=1536,
         )
         upload_result = UploadResult(
             url="https://cdn.example.com/img.jpg",
@@ -308,8 +310,82 @@ class TestImageAgent:
 
         asset = await Asset.objects.aget(variant=variant)
         assert asset.file_url == "https://cdn.example.com/img.jpg"
-        assert asset.width == 1080
-        assert asset.height == 1350
+        assert asset.width == 1024
+        assert asset.height == 1536
+
+    @pytest.mark.asyncio
+    async def test_execute_creates_asset_from_image_bytes(self, agent, enriched_brief, brand, variant):
+        from apps.assets.models import Asset
+
+        prompt_response = TextGenerationResponse(
+            text=json.dumps({
+                "image_prompt": "A clean minimalist code editor on dark background",
+                "negative_prompt": "blurry, low quality",
+                "style_notes": "modern, dark theme",
+            }),
+            model="gpt-4o-mini",
+            cost_usd=0.0001,
+        )
+        image_response = ImageGenerationResponse(
+            image_bytes=[b"generated-image"],
+            model="gpt-image-1",
+            cost_usd=0.04,
+            width=1024,
+            height=1536,
+            content_type="image/jpeg",
+        )
+        upload_result = UploadResult(
+            url="https://cdn.example.com/img.jpg",
+            key="brands/test/content/abc/img.jpg",
+            size_bytes=150000,
+        )
+
+        ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
+
+        with patch("apps.agents.image_agent.get_text_provider") as mock_text, \
+             patch("apps.agents.image_agent.get_image_provider") as mock_img, \
+             patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
+            mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=prompt_response))
+            mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
+            mock_storage.return_value = AsyncMock(upload_bytes=AsyncMock(return_value=upload_result))
+
+            result = await agent.execute(ctx)
+
+        assert result.success is True
+        assert result.data["num_images"] == 1
+        assert await Asset.objects.filter(variant=variant).acount() == 1
+
+    @pytest.mark.asyncio
+    async def test_execute_fails_when_provider_returns_no_images(self, agent, enriched_brief, brand, variant):
+        prompt_response = TextGenerationResponse(
+            text=json.dumps({
+                "image_prompt": "A clean minimalist code editor on dark background",
+                "negative_prompt": "blurry, low quality",
+                "style_notes": "modern, dark theme",
+            }),
+            model="gpt-4o-mini",
+            cost_usd=0.0001,
+        )
+        image_response = ImageGenerationResponse(
+            model="gpt-image-1",
+            cost_usd=0.04,
+            width=1024,
+            height=1536,
+        )
+
+        ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
+
+        with patch("apps.agents.image_agent.get_text_provider") as mock_text, \
+             patch("apps.agents.image_agent.get_image_provider") as mock_img, \
+             patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
+            mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=prompt_response))
+            mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
+            mock_storage.return_value = AsyncMock()
+
+            result = await agent.execute(ctx)
+
+        assert result.success is False
+        assert "no devolvio imagenes utilizables" in result.error.lower()
 
 
 # ── CarouselAgent ─────────────────────────────────────────────
@@ -357,9 +433,12 @@ class TestCarouselAgent:
             cost_usd=0.003,
         )
         image_response = ImageGenerationResponse(
-            image_urls=["https://oai.example.com/slide.jpg"],
+            image_bytes=[b"slide-image"],
             model="gpt-image-1",
             cost_usd=0.04,
+            width=1024,
+            height=1536,
+            content_type="image/jpeg",
         )
         upload_result = UploadResult(
             url="https://cdn.example.com/slide.jpg",
@@ -374,7 +453,7 @@ class TestCarouselAgent:
              patch("apps.agents.carousel_agent.get_storage_provider") as mock_storage:
             mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=structure_response))
             mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
-            mock_storage.return_value = AsyncMock(upload_from_url=AsyncMock(return_value=upload_result))
+            mock_storage.return_value = AsyncMock(upload_bytes=AsyncMock(return_value=upload_result))
 
             result = await agent.execute(ctx)
 
@@ -519,6 +598,50 @@ class TestContentOrchestrator:
         assert summary["success"] is False
         await brief.arefresh_from_db()
         assert brief.status == ContentBrief.Status.FAILED
+
+    @pytest.mark.asyncio
+    async def test_generate_content_post_failure_marks_brief_failed(self, brief, brand):
+        enricher_result = AgentResult(success=True, data={"tema": "test"}, cost_usd=0.001)
+        image_result = AgentResult(success=False, error="image api error")
+        copy_result = AgentResult(success=True, data={"caption": "ok"}, cost_usd=0.001)
+        hashtag_result = AgentResult(success=True, data={"hashtags": ["#ok"]}, cost_usd=0.001)
+
+        orch = ContentOrchestrator()
+
+        with patch.object(orch.brief_enricher, "execute", new_callable=AsyncMock, return_value=enricher_result), \
+             patch.object(orch.image_agent, "execute", new_callable=AsyncMock, return_value=image_result), \
+             patch.object(orch.copy_agent, "execute", new_callable=AsyncMock, return_value=copy_result), \
+             patch.object(orch.hashtag_agent, "execute", new_callable=AsyncMock, return_value=hashtag_result):
+            summary = await orch.generate_content(brief)
+
+        assert summary["success"] is False
+        await brief.arefresh_from_db()
+        assert brief.status == ContentBrief.Status.FAILED
+        assert "image api error" in brief.error_message
+
+    @pytest.mark.asyncio
+    async def test_generate_content_reuses_existing_variant_on_retry(self, brief, brand):
+        await ContentVariant.objects.acreate(brief=brief, version=1)
+
+        enricher_result = AgentResult(success=True, data={"tema": "test"}, cost_usd=0.001)
+        image_result = AgentResult(
+            success=True,
+            data={"images": [{"url": "https://cdn.com/img.jpg"}], "num_images": 1},
+            cost_usd=0.04,
+        )
+        copy_result = AgentResult(success=True, data={"caption": "ok"}, cost_usd=0.001)
+        hashtag_result = AgentResult(success=True, data={"hashtags": ["#ok"]}, cost_usd=0.001)
+
+        orch = ContentOrchestrator()
+
+        with patch.object(orch.brief_enricher, "execute", new_callable=AsyncMock, return_value=enricher_result), \
+             patch.object(orch.image_agent, "execute", new_callable=AsyncMock, return_value=image_result), \
+             patch.object(orch.copy_agent, "execute", new_callable=AsyncMock, return_value=copy_result), \
+             patch.object(orch.hashtag_agent, "execute", new_callable=AsyncMock, return_value=hashtag_result):
+            summary = await orch.generate_content(brief)
+
+        assert summary["success"] is True
+        assert await ContentVariant.objects.filter(brief=brief).acount() == 1
 
 
 # ── Prompts ───────────────────────────────────────────────────

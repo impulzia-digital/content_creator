@@ -93,12 +93,15 @@ Genera un prompt de imagen detallado en JSON:
                 style=context.brand.preferred_image_style,
             )
         )
+        image_width = image_response.width or w
+        image_height = image_response.height or h
+        content_type = image_response.content_type or "image/jpeg"
 
         # Paso 3: Subir a S3 y crear Assets
         assets_created = []
         for i, url in enumerate(image_response.image_urls):
             key = f"brands/{context.brand.slug}/content/{context.brief.id}/{uuid.uuid4()}.jpg"
-            upload = await storage.upload_from_url(url, key, "image/jpeg")
+            upload = await storage.upload_from_url(url, key, content_type)
 
             if context.variant:
                 asset = Asset(
@@ -108,15 +111,40 @@ Genera un prompt de imagen detallado en JSON:
                     file_url=upload.url,
                     file_key=upload.key,
                     file_size_bytes=upload.size_bytes,
-                    mime_type="image/jpeg",
-                    width=w,
-                    height=h,
+                    mime_type=content_type,
+                    width=image_width,
+                    height=image_height,
                     position=i,
                     generation_prompt=prompt_data["image_prompt"],
                     generation_params=prompt_data,
                 )
                 await asset.asave()
                 assets_created.append({"url": upload.url, "key": upload.key})
+
+        for i, image_data in enumerate(image_response.image_bytes, start=len(assets_created)):
+            key = f"brands/{context.brand.slug}/content/{context.brief.id}/{uuid.uuid4()}.jpg"
+            upload = await storage.upload_bytes(image_data, key, content_type)
+
+            if context.variant:
+                asset = Asset(
+                    variant=context.variant,
+                    asset_type=Asset.AssetType.IMAGE,
+                    source=Asset.Source.GENERATED,
+                    file_url=upload.url,
+                    file_key=upload.key,
+                    file_size_bytes=upload.size_bytes,
+                    mime_type=content_type,
+                    width=image_width,
+                    height=image_height,
+                    position=i,
+                    generation_prompt=prompt_data["image_prompt"],
+                    generation_params=prompt_data,
+                )
+                await asset.asave()
+                assets_created.append({"url": upload.url, "key": upload.key})
+
+        if not assets_created:
+            raise ValueError("El proveedor de imagen no devolvio imagenes utilizables")
 
         total_cost = prompt_response.cost_usd + image_response.cost_usd
 

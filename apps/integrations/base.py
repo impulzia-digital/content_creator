@@ -54,8 +54,12 @@ class ImageGenerationRequest:
 @dataclass
 class ImageGenerationResponse:
     image_urls: list[str] = field(default_factory=list)
+    image_bytes: list[bytes] = field(default_factory=list)
     model: str = ""
     cost_usd: float = 0.0
+    width: int = 0
+    height: int = 0
+    content_type: str = "image/jpeg"
     seed: int | None = None
     raw_response: dict = field(default_factory=dict)
 

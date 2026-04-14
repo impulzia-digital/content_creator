@@ -1,6 +1,8 @@
 """Tests para apps.assets — Asset."""
 
 import pytest
+from django.test import override_settings
+from unittest.mock import patch
 
 from apps.assets.models import Asset
 
@@ -103,3 +105,40 @@ class TestAsset:
                 position=i,
             )
         assert variant.assets.count() == 7
+
+    @override_settings(USE_S3=True, AWS_S3_CUSTOM_DOMAIN="", PUBLIC_MEDIA_BASE_URL="https://public.example.com")
+    def test_asset_public_url_uses_presigned_url_without_custom_domain(self, variant):
+        asset = Asset.objects.create(
+            variant=variant,
+            asset_type=Asset.AssetType.IMAGE,
+            file_url="https://bad.example.com/img.jpg",
+            file_key="brands/test/content/abc/img.jpg",
+        )
+
+        with patch(
+            "apps.integrations.providers.storage_s3.build_presigned_storage_url",
+            return_value="https://signed.example.com/img.jpg?signature=123",
+        ):
+            assert asset.public_url == "https://signed.example.com/img.jpg?signature=123"
+
+    @override_settings(USE_S3=True, AWS_S3_CUSTOM_DOMAIN="cdn.example.com", PUBLIC_MEDIA_BASE_URL="https://public.example.com")
+    def test_asset_public_url_uses_custom_domain_when_available(self, variant):
+        asset = Asset.objects.create(
+            variant=variant,
+            asset_type=Asset.AssetType.IMAGE,
+            file_url="https://bad.example.com/img.jpg",
+            file_key="brands/test/content/abc/img.jpg",
+        )
+
+        assert asset.public_url == "https://cdn.example.com/brands/test/content/abc/img.jpg"
+
+    @override_settings(USE_S3=False, AWS_S3_CUSTOM_DOMAIN="", PUBLIC_MEDIA_BASE_URL="")
+    def test_asset_public_url_falls_back_to_stored_url(self, variant):
+        asset = Asset.objects.create(
+            variant=variant,
+            asset_type=Asset.AssetType.IMAGE,
+            file_url="https://cdn.example.com/img.jpg",
+            file_key="",
+        )
+
+        assert asset.public_url == "https://cdn.example.com/img.jpg"

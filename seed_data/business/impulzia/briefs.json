@@ -1,0 +1,50 @@
+[
+  {
+    "seed_key": "presentacion-marca",
+    "title": "Quién es Impulzia y cómo trabaja",
+    "raw_idea": "Post de presentación explicando que Impulzia diseña soluciones digitales a medida para negocios que quieren vender más, operar mejor y crecer con claridad. Mostrar propuesta de valor, enfoque de trabajo y para qué tipo de negocio sí tiene sentido contratar sitios web, automatizaciones e IA aplicada.",
+    "content_type": "post",
+    "aspect_ratio": "4:5",
+    "num_slides": 1,
+    "status": "draft",
+    "priority": 2,
+    "tags": [
+      "presentacion",
+      "marca",
+      "propuesta-de-valor"
+    ],
+    "created_by_username": "owner"
+  },
+  {
+    "seed_key": "errores-frecuentes-cliente-ideal",
+    "title": "3 errores que hacen que tu negocio pierda ventas aunque ya esté online",
+    "raw_idea": "Carrusel educativo mostrando tres errores comunes: tener una web sin foco en conversión, depender de mensajes manuales para atender y seguir leads, y sumar herramientas o IA sin un proceso claro detrás. Explicar por qué cada error frena ventas o eficiencia y una forma concreta de corregirlo.",
+    "content_type": "carousel",
+    "aspect_ratio": "4:5",
+    "num_slides": 5,
+    "status": "draft",
+    "priority": 3,
+    "tags": [
+      "educacion",
+      "errores-comunes",
+      "digitalizacion"
+    ],
+    "created_by_username": "owner"
+  },
+  {
+    "seed_key": "caso-uso-servicio-principal",
+    "title": "Antes y después de automatizar el seguimiento comercial",
+    "raw_idea": "Reel corto contrastando dos escenarios: consultas que se enfrían por respuestas tardías, seguimiento manual y desorden comercial versus un sistema con landing, formulario, automatización y recordatorios. Mostrar el cambio en tiempo, claridad y oportunidades que dejan de perderse.",
+    "content_type": "reel",
+    "aspect_ratio": "9:16",
+    "num_slides": 1,
+    "status": "draft",
+    "priority": 4,
+    "tags": [
+      "caso-de-uso",
+      "automatizacion",
+      "ventas"
+    ],
+    "created_by_username": "owner"
+  }
+]

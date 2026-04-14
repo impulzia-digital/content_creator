@@ -88,10 +88,11 @@ class TestPublishScheduledTask:
 class TestPublishToInstagramLogic:
     @pytest.mark.asyncio
     async def test_post_publish_flow(self, brief, brand, variant, instagram_account):
-        asset = await Asset.objects.acreate(
+        await Asset.objects.acreate(
             variant=variant,
             asset_type=Asset.AssetType.IMAGE,
             file_url="https://cdn.example.com/image.jpg",
+            file_key="brands/test/content/post.jpg",
             position=0,
         )
         variant.caption = "Test caption"
@@ -107,15 +108,20 @@ class TestPublishToInstagramLogic:
             media_id="M456", permalink="https://instagram.com/p/abc"
         )
 
-        result = await _publish_to_instagram(
-            mock_publisher, brief, variant,
-            instagram_account.ig_user_id,
-            instagram_account.access_token,
-        )
+        with patch(
+            "apps.integrations.providers.storage_s3.build_presigned_storage_url",
+            return_value="https://signed.example.com/post.jpg?sig=1",
+        ):
+            result = await _publish_to_instagram(
+                mock_publisher, brief, variant,
+                instagram_account.ig_user_id,
+                instagram_account.access_token,
+            )
 
         assert result["container_id"] == "C123"
         assert result["media_id"] == "M456"
         assert "instagram.com" in result["permalink"]
+        assert mock_publisher.create_image_container.await_args.args[1] == "https://signed.example.com/post.jpg?sig=1"
 
     @pytest.mark.asyncio
     async def test_carousel_publish_flow(
@@ -133,6 +139,7 @@ class TestPublishToInstagramLogic:
                 variant=variant,
                 asset_type=Asset.AssetType.IMAGE,
                 file_url=f"https://cdn.example.com/slide_{i}.jpg",
+                file_key=f"brands/test/content/slide_{i}.jpg",
                 position=i,
             )
 
@@ -148,14 +155,23 @@ class TestPublishToInstagramLogic:
             media_id="M789", permalink="https://instagram.com/p/carousel"
         )
 
-        result = await _publish_to_instagram(
-            mock_publisher, carousel_brief, variant,
-            instagram_account.ig_user_id,
-            instagram_account.access_token,
-        )
+        with patch(
+            "apps.integrations.providers.storage_s3.build_presigned_storage_url",
+            side_effect=[
+                "https://signed.example.com/slide_0.jpg?sig=1",
+                "https://signed.example.com/slide_1.jpg?sig=1",
+                "https://signed.example.com/slide_2.jpg?sig=1",
+            ],
+        ):
+            result = await _publish_to_instagram(
+                mock_publisher, carousel_brief, variant,
+                instagram_account.ig_user_id,
+                instagram_account.access_token,
+            )
 
         assert result["media_id"] == "M789"
         assert mock_publisher.create_carousel_child_image.call_count == 3
+        assert mock_publisher.create_carousel_child_image.await_args_list[0].args[1] == "https://signed.example.com/slide_0.jpg?sig=1"
 
     @pytest.mark.asyncio
     async def test_post_without_image_raises(self, brief, brand, variant, instagram_account):
@@ -181,6 +197,7 @@ class TestPublishToInstagramLogic:
             variant=variant,
             asset_type=Asset.AssetType.VIDEO,
             file_url="https://cdn.example.com/video.mp4",
+            file_key="brands/test/content/reel.mp4",
             position=0,
         )
 
@@ -193,14 +210,19 @@ class TestPublishToInstagramLogic:
             media_id="REEL_M", permalink="https://instagram.com/reel/xyz"
         )
 
-        result = await _publish_to_instagram(
-            mock_publisher, reel_brief, variant,
-            instagram_account.ig_user_id,
-            instagram_account.access_token,
-        )
+        with patch(
+            "apps.integrations.providers.storage_s3.build_presigned_storage_url",
+            return_value="https://signed.example.com/reel.mp4?sig=1",
+        ):
+            result = await _publish_to_instagram(
+                mock_publisher, reel_brief, variant,
+                instagram_account.ig_user_id,
+                instagram_account.access_token,
+            )
 
         assert result["container_id"] == "REEL_C"
         assert result["media_id"] == "REEL_M"
+        assert mock_publisher.create_reel_container.await_args.args[1] == "https://signed.example.com/reel.mp4?sig=1"
 
 
 # ── _wait_for_container ──────────────────────────────────────

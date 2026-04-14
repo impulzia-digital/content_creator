@@ -1,5 +1,6 @@
 """Tests para apps.integrations — base dataclasses, providers, registry."""
 
+import base64
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -69,6 +70,7 @@ class TestImageGenerationResponse:
     def test_defaults(self):
         resp = ImageGenerationResponse()
         assert resp.image_urls == []
+        assert resp.image_bytes == []
         assert resp.cost_usd == 0.0
 
     def test_with_urls(self):
@@ -189,8 +191,58 @@ class TestOpenAIImageProvider:
             )
 
         assert len(result.image_urls) == 1
+        assert result.image_bytes == []
         assert "blob.core.windows.net" in result.image_urls[0]
         assert result.cost_usd > 0
+        assert result.width == 1024
+        assert result.height == 1536
+        assert result.content_type == "image/jpeg"
+
+    @pytest.mark.asyncio
+    async def test_generate_decodes_base64_images(self):
+        from apps.integrations.providers.openai_images import OpenAIImageProvider
+
+        mock_img = MagicMock()
+        mock_img.url = None
+        mock_img.b64_json = base64.b64encode(b"image-bytes").decode("ascii")
+
+        mock_response = MagicMock()
+        mock_response.data = [mock_img]
+
+        provider = OpenAIImageProvider(api_key="sk-test")
+
+        with patch.object(
+            provider._client.images, "generate",
+            new_callable=AsyncMock, return_value=mock_response,
+        ):
+            result = await provider.generate(
+                ImageGenerationRequest(prompt="a sunset")
+            )
+
+        assert result.image_urls == []
+        assert result.image_bytes == [b"image-bytes"]
+        assert result.cost_usd > 0
+        assert result.content_type == "image/jpeg"
+
+    @pytest.mark.asyncio
+    async def test_generate_normalizes_unsupported_size(self):
+        from apps.integrations.providers.openai_images import OpenAIImageProvider
+
+        mock_response = MagicMock()
+        mock_response.data = []
+
+        provider = OpenAIImageProvider(api_key="sk-test")
+
+        with patch.object(
+            provider._client.images, "generate",
+            new_callable=AsyncMock, return_value=mock_response,
+        ) as mock_generate:
+            await provider.generate(
+                ImageGenerationRequest(prompt="portrait", width=1080, height=1350)
+            )
+
+        assert mock_generate.call_args.kwargs["size"] == "1024x1536"
+        assert mock_generate.call_args.kwargs["output_format"] == "jpeg"
 
 
 # ── Meta Instagram Publisher ─────────────────────────────────
@@ -348,6 +400,7 @@ class TestS3StorageProvider:
         settings.AWS_SECRET_ACCESS_KEY = "test-secret"
         settings.AWS_STORAGE_BUCKET_NAME = "test-bucket"
         settings.AWS_S3_CUSTOM_DOMAIN = "cdn.example.com"
+        settings.PUBLIC_MEDIA_BASE_URL = ""
 
         from apps.integrations.providers.storage_s3 import S3StorageProvider
 
@@ -364,6 +417,7 @@ class TestS3StorageProvider:
         settings.AWS_SECRET_ACCESS_KEY = "test-secret"
         settings.AWS_STORAGE_BUCKET_NAME = "test-bucket"
         settings.AWS_S3_CUSTOM_DOMAIN = ""
+        settings.PUBLIC_MEDIA_BASE_URL = ""
 
         from apps.integrations.providers.storage_s3 import S3StorageProvider
 
@@ -372,6 +426,23 @@ class TestS3StorageProvider:
             url = await provider.get_public_url("my/file.jpg")
 
         assert url == "https://s3.example.com/test-bucket/my/file.jpg"
+
+    @pytest.mark.asyncio
+    async def test_get_public_url_public_media_base_url(self, settings):
+        settings.AWS_S3_ENDPOINT_URL = "https://s3.example.com"
+        settings.AWS_ACCESS_KEY_ID = "test-key"
+        settings.AWS_SECRET_ACCESS_KEY = "test-secret"
+        settings.AWS_STORAGE_BUCKET_NAME = "test-bucket"
+        settings.AWS_S3_CUSTOM_DOMAIN = ""
+        settings.PUBLIC_MEDIA_BASE_URL = "https://public.example.com"
+
+        from apps.integrations.providers.storage_s3 import S3StorageProvider
+
+        with patch("boto3.client"):
+            provider = S3StorageProvider()
+            url = await provider.get_public_url("my/file.jpg")
+
+        assert url == "https://public.example.com/assets/media/my/file.jpg"
 
 
 # ── Registry ─────────────────────────────────────────────────

@@ -127,7 +127,7 @@ async def _publish_to_instagram(publisher, brief, variant, ig_user_id, access_to
         if not assets:
             raise ValueError("No hay imagen para publicar")
         container = await publisher.create_image_container(
-            ig_user_id, assets[0].file_url, caption, access_token
+            ig_user_id, assets[0].public_url, caption, access_token
         )
         # Esperar a que el container esté listo
         await _wait_for_container(publisher, container.container_id, access_token)
@@ -139,7 +139,7 @@ async def _publish_to_instagram(publisher, brief, variant, ig_user_id, access_to
         child_ids = []
         for asset in assets:
             child = await publisher.create_carousel_child_image(
-                ig_user_id, asset.file_url, access_token
+                ig_user_id, asset.public_url, access_token
             )
             child_ids.append(child.container_id)
 
@@ -163,7 +163,7 @@ async def _publish_to_instagram(publisher, brief, variant, ig_user_id, access_to
             raise ValueError("No hay video para publicar como reel")
 
         container = await publisher.create_reel_container(
-            ig_user_id, video_assets[0].file_url, caption, access_token
+            ig_user_id, video_assets[0].public_url, caption, access_token
         )
         await _wait_for_container(publisher, container.container_id, access_token)
         result = await publisher.publish_container(ig_user_id, container.container_id, access_token)

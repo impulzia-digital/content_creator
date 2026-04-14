@@ -1,0 +1,45 @@
+{
+"slug": "impulzia",
+"name": "Impulzia",
+"logo_url": "",
+"description": "Consultoria de soluciones digitales para problemas reales de negocio. Creamos paginas web, automatizaciones e IA aplicada para vender mas, operar mejor y crecer con claridad.",
+"tagline": "Soluciones digitales para problemas reales de negocio",
+"founder_name": "Equipo Impulzia",
+"industry": "Consultoria digital, automatizacion e IA aplicada",
+"target_audience": "Negocios, profesionales y marcas que ya tienen una oferta valida pero pierden ventas, tiempo o claridad por una base digital debil, procesos manuales, baja credibilidad online o falta de visibilidad para crecer.",
+"brand_voice_prompt": "Habla en espanol claro, directo y profesional. Explica desde la logica del negocio, no desde el humo tecnico. Prioriza utilidad, claridad, criterio operativo y resultados concretos. Evita exageraciones, promesas vacias y lenguaje de gurú.",
+"tone_adjectives": [
+"directo",
+"claro",
+"profesional",
+"sobrio",
+"util"
+],
+"tone_description": "Impulzia comunica como operador: detecta el problema, lo baja a tierra y propone una solucion concreta con foco en ventas, eficiencia y claridad.",
+"forbidden_words": [
+"milagro",
+"guru",
+"hack",
+"secreto",
+"viral"
+],
+"color_primary": "#1E3A5F",
+"color_secondary": "#3B82F6",
+"color_background": "#FAFBFC",
+"color_accent": "#60A5FA",
+"color_text": "#0F1720",
+"default_hashtags": [
+"#Impulzia",
+"#SolucionesDigitales",
+"#Automatizacion",
+"#IAAplicada"
+],
+"default_language": "es",
+"preferred_image_style": "editorial-tech claro, sobrio y premium; fondo limpio, contraste medio, interfaz moderna, atmosfera fintech y foco en negocio real",
+"preferred_aspect_ratios": [
+"4:5",
+"1:1",
+"9:16"
+],
+"is_active": true
+}

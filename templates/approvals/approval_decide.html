@@ -22,7 +22,7 @@
   <div class="flex gap-2 mb-4 overflow-x-auto">
     {% for asset in approval.variant.assets.all %}
       {% if asset.asset_type == 'image' %}
-        <img src="{{ asset.file_url }}" class="h-48 rounded-lg object-cover">
+        <img src="{% url 'assets:serve_asset' asset.file_key %}" class="h-48 rounded-lg object-cover">
       {% endif %}
     {% endfor %}
   </div>
