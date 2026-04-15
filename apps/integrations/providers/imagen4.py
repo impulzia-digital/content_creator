@@ -15,9 +15,9 @@ from apps.integrations.base import (
 )
 
 _COST_PER_IMAGE = {
-    "imagen-4.0-ultra-generate-001": {"1K": 0.060, "2K": 0.080},
-    "imagen-4.0-generate-001": {"1K": 0.040, "2K": 0.060},
-    "imagen-4.0-fast-generate-001": {"1K": 0.020, "2K": 0.030},
+    "imagen-4.0-ultra-generate-001": 0.060,
+    "imagen-4.0-generate-001": 0.040,
+    "imagen-4.0-fast-generate-001": 0.020,
 }
 
 _SUPPORTED_ASPECT_RATIOS = {"1:1", "3:4", "4:3", "9:16", "16:9"}
@@ -30,7 +30,6 @@ class Imagen4ImageProvider(ImageProvider):
     async def generate(self, request: ImageGenerationRequest) -> ImageGenerationResponse:
         model = request.model or "imagen-4.0-generate-001"
         aspect_ratio = _resolve_aspect_ratio(request.width, request.height)
-        image_size = _resolve_image_size(request.width, request.height)
 
         config = types.GenerateImagesConfig(
             number_of_images=request.num_images,
@@ -57,7 +56,7 @@ class Imagen4ImageProvider(ImageProvider):
                 data = data.tobytes()
             image_bytes.append(bytes(data))
 
-        cost = _calculate_cost(model, image_size, len(image_bytes))
+        cost = _calculate_cost(model, len(image_bytes))
 
         return ImageGenerationResponse(
             image_bytes=image_bytes,
@@ -86,9 +85,8 @@ def _resolve_image_size(width: int, height: int) -> str:
     return "2K" if max(width, height) > 1024 else "1K"
 
 
-def _calculate_cost(model: str, image_size: str, image_count: int) -> float:
+def _calculate_cost(model: str, image_count: int) -> float:
     if image_count == 0:
         return 0.0
-    rates = _COST_PER_IMAGE.get(model, {})
-    unit_cost = rates.get(image_size) or rates.get("1K") or 0.04
+    unit_cost = _COST_PER_IMAGE.get(model, 0.0)
     return unit_cost * image_count

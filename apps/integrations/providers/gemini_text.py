@@ -17,13 +17,20 @@ from apps.integrations.base import (
 
 logger = logging.getLogger(__name__)
 
+_LONG_CONTEXT_THRESHOLD = 200_000
+
 _COST_PER_1M = {
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
-    "gemini-2.5-flash-lite": {"input": 0.15, "output": 1.00},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
     "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
     "gemini-3-flash-preview": {"input": 0.50, "output": 3.00},
     "gemini-3.1-pro-preview": {"input": 2.00, "output": 12.00},
     "gemini-3.1-flash-lite-preview": {"input": 0.25, "output": 1.50},
+}
+
+_LONG_CONTEXT_COST_PER_1M = {
+    "gemini-2.5-pro": {"input": 2.50, "output": 15.00},
+    "gemini-3.1-pro-preview": {"input": 4.00, "output": 18.00},
 }
 
 
@@ -53,8 +60,8 @@ class GeminiTextProvider(TextProvider):
         thoughts_tokens = int(getattr(usage, "thoughts_token_count", 0) or 0)
 
         cost = 0.0
-        if request.model in _COST_PER_1M:
-            rates = _COST_PER_1M[request.model]
+        rates = _resolve_rates(request.model, prompt_tokens)
+        if rates:
             cost = (
                 prompt_tokens * rates["input"] / 1_000_000
                 + (completion_tokens + thoughts_tokens) * rates["output"] / 1_000_000
@@ -78,11 +85,17 @@ def _extract_text(response: types.GenerateContentResponse) -> str:
     for candidate in getattr(response, "candidates", []) or []:
         content = getattr(candidate, "content", None)
         for part in getattr(content, "parts", []) or []:
-            if getattr(part, "thought", False):
+            if getattr(part, "thought", None) is True:
                 continue
             if getattr(part, "text", None):
                 parts.append(part.text)
     return "".join(parts)
+
+
+def _resolve_rates(model: str, prompt_tokens: int) -> dict[str, float]:
+    if prompt_tokens > _LONG_CONTEXT_THRESHOLD and model in _LONG_CONTEXT_COST_PER_1M:
+        return _LONG_CONTEXT_COST_PER_1M[model]
+    return _COST_PER_1M.get(model, {})
 
 
 def _dump_response(response: types.GenerateContentResponse) -> dict:

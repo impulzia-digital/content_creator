@@ -22,6 +22,8 @@ for _prov in get_providers_for("image"):
 class BrandAIDefaultsForm(forms.ModelForm):
     """Form with explicit provider/model fields that hydrate ai_provider_defaults JSON."""
 
+    logo_url = forms.URLField(required=False, assume_scheme="https", label="Logo URL")
+
     ai_text_provider = forms.ChoiceField(
         choices=_TEXT_PROVIDERS, required=False, label="Provider de texto",
     )

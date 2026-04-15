@@ -9,6 +9,7 @@
 - Routing IA ampliado con catálogo de modelos, overrides por marca y brief, providers Gemini e Imagen 4, y selector dinámico de modelos en el formulario de briefs.
 - Compatibilidad corregida para GPT-5 con `max_completion_tokens` y para Gemini Image sin `output_mime_type` en la API nativa.
 - Sistema de costos pulido para reflejar la generación vigente en brief, variante y tabla, con backfill de variantes históricas y cobertura de tests dedicada.
+- Pricing de providers alineado con la documentación oficial: GPT Image usa `quality=medium` explícita y tarifas reales por modelo/tamaño, Gemini Flash-Lite corrige sus rates, Gemini Image excluye thought-images y suma tokens billables cuando la API los expone, e Imagen 4 pasa a precio plano por imagen según modelo.
 
 ## 2026-04-13
 

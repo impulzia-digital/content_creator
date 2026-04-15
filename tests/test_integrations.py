@@ -231,14 +231,110 @@ class TestGeminiTextProvider:
         assert result.text == '{"result": "ok"}'
         assert result.model == "gemini-2.5-flash"
         assert result.completion_tokens == 7
-        assert result.cost_usd > 0
+        assert result.cost_usd == pytest.approx(0.0000205)
         assert mock_to_thread.call_args.kwargs["config"].response_mime_type == "application/json"
+
+    @pytest.mark.asyncio
+    async def test_generate_uses_official_flash_lite_rates(self):
+        from apps.integrations.providers.gemini_text import GeminiTextProvider
+
+        mock_response = MagicMock()
+        mock_response.text = "ok"
+        mock_response.model_version = "gemini-2.5-flash-lite"
+        mock_response.usage_metadata = MagicMock(
+            prompt_token_count=1000,
+            candidates_token_count=500,
+            thoughts_token_count=250,
+        )
+        mock_response.model_dump.return_value = {}
+
+        provider = GeminiTextProvider(api_key="gm-test")
+
+        with patch(
+            "apps.integrations.providers.gemini_text.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await provider.generate(
+                TextGenerationRequest(
+                    system_prompt="sys",
+                    user_prompt="user",
+                    model="gemini-2.5-flash-lite",
+                )
+            )
+
+        assert result.cost_usd == pytest.approx(0.0004)
+        assert result.completion_tokens == 750
+
+    @pytest.mark.asyncio
+    async def test_generate_uses_long_context_pro_rates(self):
+        from apps.integrations.providers.gemini_text import GeminiTextProvider
+
+        mock_response = MagicMock()
+        mock_response.text = "ok"
+        mock_response.model_version = "gemini-2.5-pro"
+        mock_response.usage_metadata = MagicMock(
+            prompt_token_count=250000,
+            candidates_token_count=10,
+            thoughts_token_count=0,
+        )
+        mock_response.model_dump.return_value = {}
+
+        provider = GeminiTextProvider(api_key="gm-test")
+
+        with patch(
+            "apps.integrations.providers.gemini_text.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await provider.generate(
+                TextGenerationRequest(
+                    system_prompt="sys",
+                    user_prompt="user",
+                    model="gemini-2.5-pro",
+                )
+            )
+
+        assert result.cost_usd == pytest.approx(0.62515)
 
 
 # ── OpenAI Image Provider ────────────────────────────────────
 
 
 class TestOpenAIImageProvider:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("model", "expected_cost"),
+        [
+            ("gpt-image-1.5", 0.050),
+            ("gpt-image-1", 0.063),
+            ("gpt-image-1-mini", 0.015),
+        ],
+    )
+    async def test_generate_uses_official_medium_quality_pricing(self, model, expected_cost):
+        from apps.integrations.providers.openai_images import OpenAIImageProvider
+
+        mock_img = MagicMock()
+        mock_img.url = "https://oaidalleapiprodscus.blob.core.windows.net/img.jpg"
+
+        mock_response = MagicMock()
+        mock_response.data = [mock_img]
+
+        provider = OpenAIImageProvider(api_key="sk-test")
+
+        with patch.object(
+            provider._client.images, "generate",
+            new_callable=AsyncMock, return_value=mock_response,
+        ) as mock_generate:
+            result = await provider.generate(
+                ImageGenerationRequest(prompt="a sunset", model=model)
+            )
+
+        assert result.cost_usd == pytest.approx(expected_cost)
+        assert result.width == 1024
+        assert result.height == 1536
+        assert mock_generate.call_args.kwargs["quality"] == "medium"
+
     @pytest.mark.asyncio
     async def test_generate_returns_urls(self):
         from apps.integrations.providers.openai_images import OpenAIImageProvider
@@ -262,7 +358,7 @@ class TestOpenAIImageProvider:
         assert len(result.image_urls) == 1
         assert result.image_bytes == []
         assert "blob.core.windows.net" in result.image_urls[0]
-        assert result.cost_usd > 0
+        assert result.cost_usd == pytest.approx(0.063)
         assert result.width == 1024
         assert result.height == 1536
         assert result.content_type == "image/jpeg"
@@ -290,8 +386,30 @@ class TestOpenAIImageProvider:
 
         assert result.image_urls == []
         assert result.image_bytes == [b"image-bytes"]
-        assert result.cost_usd > 0
+        assert result.cost_usd == pytest.approx(0.063)
         assert result.content_type == "image/jpeg"
+
+    @pytest.mark.asyncio
+    async def test_generate_uses_actual_returned_image_count_for_cost(self):
+        from apps.integrations.providers.openai_images import OpenAIImageProvider
+
+        mock_img = MagicMock()
+        mock_img.url = "https://oaidalleapiprodscus.blob.core.windows.net/img.jpg"
+
+        mock_response = MagicMock()
+        mock_response.data = [mock_img]
+
+        provider = OpenAIImageProvider(api_key="sk-test")
+
+        with patch.object(
+            provider._client.images, "generate",
+            new_callable=AsyncMock, return_value=mock_response,
+        ):
+            result = await provider.generate(
+                ImageGenerationRequest(prompt="a sunset", num_images=3)
+            )
+
+        assert result.cost_usd == pytest.approx(0.063)
 
     @pytest.mark.asyncio
     async def test_generate_normalizes_unsupported_size(self):
@@ -312,6 +430,7 @@ class TestOpenAIImageProvider:
 
         assert mock_generate.call_args.kwargs["size"] == "1024x1536"
         assert mock_generate.call_args.kwargs["output_format"] == "jpeg"
+        assert mock_generate.call_args.kwargs["quality"] == "medium"
 
 
 class TestGeminiImageProvider:
@@ -320,6 +439,7 @@ class TestGeminiImageProvider:
         from apps.integrations.providers.gemini_images import GeminiImageProvider
 
         part = MagicMock()
+        part.thought = False
         part.inline_data = MagicMock(
             data=base64.b64encode(b"image-bytes").decode("ascii"),
             mime_type="image/jpeg",
@@ -329,6 +449,11 @@ class TestGeminiImageProvider:
         mock_response = MagicMock()
         mock_response.candidates = [candidate]
         mock_response.model_version = "gemini-3-pro-image-preview"
+        mock_response.usage_metadata = MagicMock(
+            prompt_token_count=100,
+            candidates_token_count=20,
+            thoughts_token_count=5,
+        )
         mock_response.model_dump.return_value = {}
 
         provider = GeminiImageProvider(api_key="gm-test")
@@ -350,10 +475,141 @@ class TestGeminiImageProvider:
         assert result.image_urls == []
         assert result.image_bytes == [b"image-bytes"]
         assert result.content_type == "image/jpeg"
-        assert result.cost_usd > 0
+        assert result.cost_usd == pytest.approx(0.1345)
         config = mock_to_thread.call_args.kwargs["config"]
         assert config.response_modalities == ["IMAGE"]
         assert config.image_config.aspect_ratio is not None
+        assert config.image_config.image_size == "2K"
+
+    @pytest.mark.asyncio
+    async def test_generate_ignores_thought_images_for_assets_and_cost(self):
+        from apps.integrations.providers.gemini_images import GeminiImageProvider
+
+        thought_part = MagicMock()
+        thought_part.thought = True
+        thought_part.inline_data = MagicMock(
+            data=base64.b64encode(b"draft-image").decode("ascii"),
+            mime_type="image/jpeg",
+        )
+
+        final_part = MagicMock()
+        final_part.thought = False
+        final_part.inline_data = MagicMock(
+            data=base64.b64encode(b"final-image").decode("ascii"),
+            mime_type="image/jpeg",
+        )
+
+        candidate = MagicMock()
+        candidate.content = MagicMock(parts=[thought_part, final_part])
+
+        mock_response = MagicMock()
+        mock_response.candidates = [candidate]
+        mock_response.model_version = "gemini-3.1-flash-image-preview"
+        mock_response.usage_metadata = MagicMock(
+            prompt_token_count=0,
+            candidates_token_count=0,
+            thoughts_token_count=0,
+        )
+        mock_response.model_dump.return_value = {}
+
+        provider = GeminiImageProvider(api_key="gm-test")
+
+        with patch(
+            "apps.integrations.providers.gemini_images.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await provider.generate(
+                ImageGenerationRequest(
+                    prompt="hero product shot",
+                    model="gemini-3.1-flash-image-preview",
+                    width=512,
+                    height=512,
+                )
+            )
+
+        assert result.image_bytes == [b"final-image"]
+        assert result.cost_usd == pytest.approx(0.045)
+
+    @pytest.mark.asyncio
+    async def test_generate_uses_fixed_1k_pricing_for_gemini_25_flash_image(self):
+        from apps.integrations.providers.gemini_images import GeminiImageProvider
+
+        part = MagicMock()
+        part.thought = False
+        part.inline_data = MagicMock(
+            data=base64.b64encode(b"image-bytes").decode("ascii"),
+            mime_type="image/jpeg",
+        )
+        candidate = MagicMock()
+        candidate.content = MagicMock(parts=[part])
+        mock_response = MagicMock()
+        mock_response.candidates = [candidate]
+        mock_response.model_version = "gemini-2.5-flash-image"
+        mock_response.usage_metadata = MagicMock(
+            prompt_token_count=0,
+            candidates_token_count=0,
+            thoughts_token_count=0,
+        )
+        mock_response.model_dump.return_value = {}
+
+        provider = GeminiImageProvider(api_key="gm-test")
+
+        with patch(
+            "apps.integrations.providers.gemini_images.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ) as mock_to_thread:
+            result = await provider.generate(
+                ImageGenerationRequest(
+                    prompt="hero product shot",
+                    model="gemini-2.5-flash-image",
+                    width=4096,
+                    height=4096,
+                )
+            )
+
+        assert result.cost_usd == pytest.approx(0.039)
+        config = mock_to_thread.call_args.kwargs["config"]
+        assert getattr(config.image_config, "image_size", None) is None
+
+
+class TestImagen4ImageProvider:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("model", "expected_cost"),
+        [
+            ("imagen-4.0-fast-generate-001", 0.020),
+            ("imagen-4.0-generate-001", 0.040),
+            ("imagen-4.0-ultra-generate-001", 0.060),
+        ],
+    )
+    async def test_generate_uses_flat_official_pricing(self, model, expected_cost):
+        from apps.integrations.providers.imagen4 import Imagen4ImageProvider
+
+        generated = MagicMock()
+        generated.image = MagicMock(image_bytes=b"image-bytes")
+        mock_response = MagicMock()
+        mock_response.generated_images = [generated]
+
+        provider = Imagen4ImageProvider(api_key="gm-test")
+
+        with patch(
+            "apps.integrations.providers.imagen4.asyncio.to_thread",
+            new_callable=AsyncMock,
+            return_value=mock_response,
+        ):
+            result = await provider.generate(
+                ImageGenerationRequest(
+                    prompt="catalog shot",
+                    model=model,
+                    width=4096,
+                    height=4096,
+                )
+            )
+
+        assert result.image_bytes == [b"image-bytes"]
+        assert result.cost_usd == pytest.approx(expected_cost)
 
 
 # ── Meta Instagram Publisher ─────────────────────────────────
@@ -970,7 +1226,7 @@ class TestImagen4ImageProvider:
             )
 
         assert len(result.image_bytes) == 3
-        assert result.cost_usd > 0
+        assert result.cost_usd == pytest.approx(0.12)
 
     def test_resolve_aspect_ratio_portrait(self):
         from apps.integrations.providers.imagen4 import _resolve_aspect_ratio
@@ -999,13 +1255,13 @@ class TestImagen4ImageProvider:
     def test_calculate_cost(self):
         from apps.integrations.providers.imagen4 import _calculate_cost
 
-        cost = _calculate_cost("imagen-4.0-generate-001", "1K", 1)
+        cost = _calculate_cost("imagen-4.0-generate-001", 1)
         assert cost == 0.040
 
-        cost_2k = _calculate_cost("imagen-4.0-generate-001", "2K", 2)
-        assert cost_2k == 0.120
+        cost_multi = _calculate_cost("imagen-4.0-generate-001", 2)
+        assert cost_multi == 0.080
 
-        assert _calculate_cost("imagen-4.0-generate-001", "1K", 0) == 0.0
+        assert _calculate_cost("imagen-4.0-generate-001", 0) == 0.0
 
 
 # ── Registry — Imagen ────────────────────────────────────────
@@ -1070,7 +1326,7 @@ class TestOpenAICostUpdates:
         with patch.object(
             provider._client.images, "generate",
             new_callable=AsyncMock, return_value=mock_response,
-        ):
+        ) as mock_generate:
             result = await provider.generate(
                 ImageGenerationRequest(
                     prompt="test", model="gpt-image-1.5",
@@ -1078,4 +1334,5 @@ class TestOpenAICostUpdates:
                 )
             )
 
-        assert result.cost_usd == 0.050
+        assert result.cost_usd == pytest.approx(0.034)
+        assert mock_generate.call_args.kwargs["quality"] == "medium"

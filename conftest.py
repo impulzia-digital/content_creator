@@ -3,10 +3,29 @@ Root conftest.py — fixtures compartidos para todo el proyecto.
 """
 
 import pytest
+from django.db import connections
 from django.contrib.auth.models import User
 
 from apps.brands.models import Brand, InstagramAccount, Membership
 from apps.content.models import ContentBrief, ContentVariant, AgentRun
+
+
+@pytest.fixture(scope="session", autouse=True)
+def close_django_connections_before_teardown(django_db_setup, django_db_blocker):
+    yield
+    with django_db_blocker.unblock():
+        default_connection = connections["default"]
+        if default_connection.vendor == "postgresql":
+            with default_connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = current_database()
+                      AND pid <> pg_backend_pid()
+                    """
+                )
+        connections.close_all()
 
 
 # ── Users ─────────────────────────────────────────────────────

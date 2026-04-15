@@ -2,12 +2,14 @@
 # Django settings — Base (shared across all environments)
 # ============================================================
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
 from decouple import config, Csv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+RUNNING_PYTEST = any("pytest" in arg for arg in sys.argv)
 
 SECRET_KEY = config("SECRET_KEY", default="change-me-in-production")
 DEBUG = config("DEBUG", default=False, cast=bool)
@@ -75,7 +77,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": dj_database_url.config(
         default="postgres://postgres:postgres@db:5432/contenido_ig",
-        conn_max_age=600,
+        conn_max_age=0 if RUNNING_PYTEST else 600,
     )
 }
 
