@@ -2,6 +2,7 @@
 
 ## 2026-04-15
 
+- Documentación de integración con Canva Connect API añadida en `docs/canva-integration/`: guía completa, plan de implementación en 4 fases (Ruta Canva + Ruta Híbrida) y checklist de prerequisitos. Pendiente de cuenta Enterprise para implementar.
 - Soporte de video promovido a capability de primera clase: catálogo ampliado, defaults por marca/brief y selector de provider/modelo para reels en el formulario.
 - Implementados providers de video para Creatomate y Google Veo, con registro/routing real, settings dedicados y persistencia automática de assets de video y thumbnail desde `VideoAgent`.
 - Backoffice endurecido para generaciones incompletas: el detalle del brief detecta reels sin asset renderizado, permite regeneración y mejora el streaming MP4 con soporte de byte ranges.
