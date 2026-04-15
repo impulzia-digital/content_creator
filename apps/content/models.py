@@ -1,4 +1,5 @@
 import uuid
+from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
@@ -58,6 +59,15 @@ class ContentBrief(TimeStampedModel):
         blank=True,
         help_text="Brief expandido por BriefEnricherAgent (JSON estructurado)",
     )
+    ai_provider_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Overrides opcionales para este brief. Soporta nivel default o por agente. Ej: "
+            '{"text": {"default": {"provider": "gemini", "model": "gemini-2.5-pro"}}, '
+            '"image": {"default": {"provider": "gemini", "model": "gemini-3-pro-image-preview"}}}'
+        ),
+    )
 
     # Tipo y formato
     content_type = models.CharField(
@@ -99,6 +109,35 @@ class ContentBrief(TimeStampedModel):
             models.Index(fields=["content_type"]),
         ]
 
+    @property
+    def latest_generation_cost_usd(self):
+        """Costo de la última generación exitosa visible para el usuario."""
+        latest_enricher = self.agent_runs.filter(
+            agent_type=AgentRun.AgentType.BRIEF_ENRICHER,
+            status=AgentRun.RunStatus.SUCCESS,
+        ).first()
+        if not latest_enricher:
+            return Decimal("0")
+
+        total = self.agent_runs.filter(
+            created_at__gte=latest_enricher.created_at,
+            status=AgentRun.RunStatus.SUCCESS,
+        ).aggregate(total=models.Sum("cost_usd"))["total"]
+        return total or Decimal("0")
+
+    @property
+    def total_cost_usd(self):
+        """Costo actual del brief, alineado con la última generación mostrada."""
+        selected_variant = self.variants.filter(is_selected=True).first()
+        if selected_variant and selected_variant.generation_cost_usd:
+            return selected_variant.generation_cost_usd
+
+        latest_variant = self.variants.order_by("-version", "-created_at").first()
+        if latest_variant and latest_variant.generation_cost_usd:
+            return latest_variant.generation_cost_usd
+
+        return self.latest_generation_cost_usd
+
     def __str__(self):
         return f"[{self.get_content_type_display()}] {self.title}"
 
@@ -136,6 +175,20 @@ class ContentVariant(TimeStampedModel):
     class Meta:
         ordering = ["brief", "version"]
         unique_together = ["brief", "version"]
+
+    @property
+    def display_generation_cost_usd(self):
+        """Costo mostrado en UI con fallback para variantes históricas sin backfill."""
+        if self.generation_cost_usd:
+            return self.generation_cost_usd
+
+        if self.is_selected:
+            return self.brief.total_cost_usd
+
+        total = self.agent_runs.filter(
+            status=AgentRun.RunStatus.SUCCESS,
+        ).aggregate(total=models.Sum("cost_usd"))["total"]
+        return total or Decimal("0")
 
     def __str__(self):
         return f"{self.brief.title} — v{self.version}"

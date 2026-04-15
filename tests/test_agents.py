@@ -19,8 +19,45 @@ from apps.integrations.base import (
     TextGenerationResponse,
     UploadResult,
 )
+from apps.integrations.routing import ResolvedGenerationConfig
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+
+def _resolved_text(provider: str = "openai", model: str = "gpt-4o-mini"):
+    return ResolvedGenerationConfig(
+        capability="text",
+        provider=provider,
+        model=model,
+        provider_source="test",
+        model_source="test",
+    )
+
+
+def _resolved_image(provider: str = "openai", model: str = "gpt-image-1"):
+    return ResolvedGenerationConfig(
+        capability="image",
+        provider=provider,
+        model=model,
+        provider_source="test",
+        model_source="test",
+    )
+
+
+def _mock_text_resolution(agent, provider, config):
+    def _resolver(context):
+        agent._store_generation_config(context, "text", config)
+        return provider, config
+
+    return _resolver
+
+
+def _mock_image_resolution(agent, provider, config):
+    def _resolver(context):
+        agent._store_generation_config(context, "image", config)
+        return provider, config
+
+    return _resolver
 
 
 # ── AgentContext ──────────────────────────────────────────────
@@ -114,12 +151,14 @@ class TestBriefEnricherAgent:
 
         ctx = AgentContext(brief=brief, brand=brand)
 
-        with patch(
-            "apps.agents.brief_enricher.get_text_provider"
-        ) as mock_get:
-            mock_provider = AsyncMock()
-            mock_provider.generate.return_value = mock_response
-            mock_get.return_value = mock_provider
+        mock_provider = AsyncMock()
+        mock_provider.generate.return_value = mock_response
+
+        with patch.object(
+            agent,
+            "resolve_text_generation",
+            side_effect=_mock_text_resolution(agent, mock_provider, _resolved_text()),
+        ):
 
             result = await agent.execute(ctx)
 
@@ -133,20 +172,25 @@ class TestBriefEnricherAgent:
         assert brief.enriched_brief["tema"] == "Clean code"
 
         # Verify AgentRun was created
-        assert await AgentRun.objects.filter(
+        run = await AgentRun.objects.filter(
             brief=brief, agent_type="brief_enricher"
-        ).aexists()
+        ).aget()
+        assert run.provider == "openai"
+        assert run.model_used == "gpt-4o-mini"
+        assert run.input_data["generation_config"]["text"]["model"] == "gpt-4o-mini"
 
     @pytest.mark.asyncio
     async def test_execute_failure_creates_failed_run(self, agent, brief, brand):
         ctx = AgentContext(brief=brief, brand=brand)
 
-        with patch(
-            "apps.agents.brief_enricher.get_text_provider"
-        ) as mock_get:
-            mock_provider = AsyncMock()
-            mock_provider.generate.side_effect = Exception("API down")
-            mock_get.return_value = mock_provider
+        mock_provider = AsyncMock()
+        mock_provider.generate.side_effect = Exception("API down")
+
+        with patch.object(
+            agent,
+            "resolve_text_generation",
+            side_effect=_mock_text_resolution(agent, mock_provider, _resolved_text()),
+        ):
 
             result = await agent.execute(ctx)
 
@@ -188,10 +232,14 @@ class TestCopyAgent:
         )
         ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
 
-        with patch("apps.agents.copy_agent.get_text_provider") as mock_get:
-            mock_provider = AsyncMock()
-            mock_provider.generate.return_value = mock_response
-            mock_get.return_value = mock_provider
+        mock_provider = AsyncMock()
+        mock_provider.generate.return_value = mock_response
+
+        with patch.object(
+            agent,
+            "resolve_text_generation",
+            side_effect=_mock_text_resolution(agent, mock_provider, _resolved_text()),
+        ):
 
             result = await agent.execute(ctx)
 
@@ -233,10 +281,14 @@ class TestHashtagAgent:
         )
         ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
 
-        with patch("apps.agents.hashtag_agent.get_text_provider") as mock_get:
-            mock_provider = AsyncMock()
-            mock_provider.generate.return_value = mock_response
-            mock_get.return_value = mock_provider
+        mock_provider = AsyncMock()
+        mock_provider.generate.return_value = mock_response
+
+        with patch.object(
+            agent,
+            "resolve_text_generation",
+            side_effect=_mock_text_resolution(agent, mock_provider, _resolved_text()),
+        ):
 
             result = await agent.execute(ctx)
 
@@ -295,11 +347,14 @@ class TestImageAgent:
 
         ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
 
-        with patch("apps.agents.image_agent.get_text_provider") as mock_text, \
-             patch("apps.agents.image_agent.get_image_provider") as mock_img, \
-             patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
-            mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=prompt_response))
-            mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
+        mock_text = AsyncMock()
+        mock_text.generate.return_value = prompt_response
+        mock_image = AsyncMock()
+        mock_image.generate.return_value = image_response
+
+        with patch.object(agent, "resolve_text_generation", side_effect=_mock_text_resolution(agent, mock_text, _resolved_text())), \
+            patch.object(agent, "resolve_image_generation", side_effect=_mock_image_resolution(agent, mock_image, _resolved_image())), \
+            patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
             mock_storage.return_value = AsyncMock(upload_from_url=AsyncMock(return_value=upload_result))
 
             result = await agent.execute(ctx)
@@ -312,6 +367,7 @@ class TestImageAgent:
         assert asset.file_url == "https://cdn.example.com/img.jpg"
         assert asset.width == 1024
         assert asset.height == 1536
+        assert asset.generation_params["_image_generation"]["model"] == "gpt-image-1"
 
     @pytest.mark.asyncio
     async def test_execute_creates_asset_from_image_bytes(self, agent, enriched_brief, brand, variant):
@@ -328,7 +384,7 @@ class TestImageAgent:
         )
         image_response = ImageGenerationResponse(
             image_bytes=[b"generated-image"],
-            model="gpt-image-1",
+            model="gemini-3-pro-image-preview",
             cost_usd=0.04,
             width=1024,
             height=1536,
@@ -342,11 +398,14 @@ class TestImageAgent:
 
         ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
 
-        with patch("apps.agents.image_agent.get_text_provider") as mock_text, \
-             patch("apps.agents.image_agent.get_image_provider") as mock_img, \
-             patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
-            mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=prompt_response))
-            mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
+        mock_text = AsyncMock()
+        mock_text.generate.return_value = prompt_response
+        mock_image = AsyncMock()
+        mock_image.generate.return_value = image_response
+
+        with patch.object(agent, "resolve_text_generation", side_effect=_mock_text_resolution(agent, mock_text, _resolved_text(provider="gemini", model="gemini-2.5-flash"))), \
+            patch.object(agent, "resolve_image_generation", side_effect=_mock_image_resolution(agent, mock_image, _resolved_image(provider="gemini", model="gemini-3-pro-image-preview"))), \
+            patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
             mock_storage.return_value = AsyncMock(upload_bytes=AsyncMock(return_value=upload_result))
 
             result = await agent.execute(ctx)
@@ -354,6 +413,12 @@ class TestImageAgent:
         assert result.success is True
         assert result.data["num_images"] == 1
         assert await Asset.objects.filter(variant=variant).acount() == 1
+
+        run = await AgentRun.objects.filter(brief=enriched_brief, agent_type=AgentRun.AgentType.IMAGE).afirst()
+        assert run is not None
+        assert run.provider == "gemini"
+        assert run.model_used == "gemini-3-pro-image-preview"
+        assert run.input_data["generation_config"]["image"]["provider"] == "gemini"
 
     @pytest.mark.asyncio
     async def test_execute_fails_when_provider_returns_no_images(self, agent, enriched_brief, brand, variant):
@@ -375,11 +440,14 @@ class TestImageAgent:
 
         ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
 
-        with patch("apps.agents.image_agent.get_text_provider") as mock_text, \
-             patch("apps.agents.image_agent.get_image_provider") as mock_img, \
-             patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
-            mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=prompt_response))
-            mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
+        mock_text = AsyncMock()
+        mock_text.generate.return_value = prompt_response
+        mock_image = AsyncMock()
+        mock_image.generate.return_value = image_response
+
+        with patch.object(agent, "resolve_text_generation", side_effect=_mock_text_resolution(agent, mock_text, _resolved_text())), \
+            patch.object(agent, "resolve_image_generation", side_effect=_mock_image_resolution(agent, mock_image, _resolved_image())), \
+            patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
             mock_storage.return_value = AsyncMock()
 
             result = await agent.execute(ctx)
@@ -448,11 +516,14 @@ class TestCarouselAgent:
 
         ctx = AgentContext(brief=carousel_brief, brand=brand, variant=variant)
 
-        with patch("apps.agents.carousel_agent.get_text_provider") as mock_text, \
-             patch("apps.agents.carousel_agent.get_image_provider") as mock_img, \
-             patch("apps.agents.carousel_agent.get_storage_provider") as mock_storage:
-            mock_text.return_value = AsyncMock(generate=AsyncMock(return_value=structure_response))
-            mock_img.return_value = AsyncMock(generate=AsyncMock(return_value=image_response))
+        mock_text = AsyncMock()
+        mock_text.generate.return_value = structure_response
+        mock_image = AsyncMock()
+        mock_image.generate.return_value = image_response
+
+        with patch.object(agent, "resolve_text_generation", side_effect=_mock_text_resolution(agent, mock_text, _resolved_text(model="gpt-4o"))), \
+            patch.object(agent, "resolve_image_generation", side_effect=_mock_image_resolution(agent, mock_image, _resolved_image())), \
+            patch("apps.agents.carousel_agent.get_storage_provider") as mock_storage:
             mock_storage.return_value = AsyncMock(upload_bytes=AsyncMock(return_value=upload_result))
 
             result = await agent.execute(ctx)
@@ -502,8 +573,14 @@ class TestVideoAgent:
         )
         ctx = AgentContext(brief=reel_brief, brand=brand)
 
-        with patch("apps.agents.video_agent.get_text_provider") as mock_get:
-            mock_get.return_value = AsyncMock(generate=AsyncMock(return_value=mock_response))
+        mock_provider = AsyncMock()
+        mock_provider.generate.return_value = mock_response
+
+        with patch.object(
+            agent,
+            "resolve_text_generation",
+            side_effect=_mock_text_resolution(agent, mock_provider, _resolved_text(model="gpt-4o")),
+        ):
             result = await agent.execute(ctx)
 
         assert result.success is True

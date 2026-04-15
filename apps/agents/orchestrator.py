@@ -87,7 +87,14 @@ class ContentOrchestrator:
                 await self._mark_failed(brief, first_error)
                 return self._build_summary(results)
 
-            # Paso 4: Marcar como review
+            # Paso 4: Actualizar costo de la variante
+            variant_cost = sum(
+                r.cost_usd for k, r in results.items() if r.success
+            )
+            variant.generation_cost_usd = variant_cost
+            await variant.asave(update_fields=["generation_cost_usd"])
+
+            # Paso 5: Marcar como review
             brief.status = ContentBrief.Status.REVIEW
             brief.error_message = ""
             await brief.asave(update_fields=["status", "error_message"])

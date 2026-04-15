@@ -35,6 +35,7 @@ class TestBrand:
         assert b.forbidden_words == []
         assert b.default_hashtags == []
         assert b.preferred_aspect_ratios == []
+        assert b.ai_provider_defaults == {}
 
     def test_brand_get_brand_briefing(self, brand):
         briefing = brand.get_brand_briefing()
@@ -113,3 +114,129 @@ class TestMembership:
         Membership.objects.create(user=user, brand=b1, role=Membership.Role.OWNER)
         Membership.objects.create(user=user, brand=b2, role=Membership.Role.VIEWER)
         assert user.memberships.count() == 2
+
+
+@pytest.mark.django_db
+class TestBrandAIDefaultsForm:
+    def test_form_saves_provider_and_model_to_json(self, brand):
+        from apps.brands.admin import BrandAIDefaultsForm
+
+        data = {
+            "name": brand.name,
+            "slug": brand.slug,
+            "default_language": "es",
+            "is_active": True,
+            "ai_text_provider": "gemini",
+            "ai_text_model": "gemini-2.5-flash",
+            "ai_text_model_custom": "",
+            "ai_image_provider": "imagen",
+            "ai_image_model": "imagen-4.0-generate-001",
+            "ai_image_model_custom": "",
+        }
+        form = BrandAIDefaultsForm(data, instance=brand)
+        assert form.is_valid(), form.errors
+        saved = form.save()
+
+        defaults = saved.ai_provider_defaults
+        assert defaults["text"]["default"]["provider"] == "gemini"
+        assert defaults["text"]["default"]["model"] == "gemini-2.5-flash"
+        assert defaults["image"]["default"]["provider"] == "imagen"
+        assert defaults["image"]["default"]["model"] == "imagen-4.0-generate-001"
+
+    def test_form_custom_model(self, brand):
+        from apps.brands.admin import BrandAIDefaultsForm
+
+        data = {
+            "name": brand.name,
+            "slug": brand.slug,
+            "default_language": "es",
+            "is_active": True,
+            "ai_text_provider": "openai",
+            "ai_text_model": "__custom__",
+            "ai_text_model_custom": "gpt-future-99",
+            "ai_image_provider": "",
+            "ai_image_model": "",
+            "ai_image_model_custom": "",
+        }
+        form = BrandAIDefaultsForm(data, instance=brand)
+        assert form.is_valid(), form.errors
+        saved = form.save()
+
+        assert saved.ai_provider_defaults["text"]["default"]["model"] == "gpt-future-99"
+        assert "image" not in saved.ai_provider_defaults
+
+    def test_form_preserves_per_agent_overrides(self, brand):
+        from apps.brands.admin import BrandAIDefaultsForm
+
+        brand.ai_provider_defaults = {
+            "text": {
+                "carousel": {"provider": "gemini", "model": "gemini-2.5-pro"},
+                "default": {"provider": "openai", "model": "gpt-4o"},
+            }
+        }
+        brand.save()
+
+        data = {
+            "name": brand.name,
+            "slug": brand.slug,
+            "default_language": "es",
+            "is_active": True,
+            "ai_text_provider": "openai",
+            "ai_text_model": "gpt-5.4-mini",
+            "ai_text_model_custom": "",
+            "ai_image_provider": "",
+            "ai_image_model": "",
+            "ai_image_model_custom": "",
+        }
+        form = BrandAIDefaultsForm(data, instance=brand)
+        assert form.is_valid(), form.errors
+        saved = form.save()
+
+        defaults = saved.ai_provider_defaults
+        # Per-agent override preserved
+        assert defaults["text"]["carousel"]["provider"] == "gemini"
+        assert defaults["text"]["carousel"]["model"] == "gemini-2.5-pro"
+        # Default updated
+        assert defaults["text"]["default"]["provider"] == "openai"
+        assert defaults["text"]["default"]["model"] == "gpt-5.4-mini"
+
+    def test_form_clears_defaults_when_empty(self, brand):
+        from apps.brands.admin import BrandAIDefaultsForm
+
+        brand.ai_provider_defaults = {
+            "text": {"default": {"provider": "openai", "model": "gpt-4o"}}
+        }
+        brand.save()
+
+        data = {
+            "name": brand.name,
+            "slug": brand.slug,
+            "default_language": "es",
+            "is_active": True,
+            "ai_text_provider": "",
+            "ai_text_model": "",
+            "ai_text_model_custom": "",
+            "ai_image_provider": "",
+            "ai_image_model": "",
+            "ai_image_model_custom": "",
+        }
+        form = BrandAIDefaultsForm(data, instance=brand)
+        assert form.is_valid(), form.errors
+        saved = form.save()
+
+        assert saved.ai_provider_defaults == {}
+
+    def test_form_init_prepopulates_from_existing(self, brand):
+        from apps.brands.admin import BrandAIDefaultsForm
+
+        brand.ai_provider_defaults = {
+            "text": {"default": {"provider": "gemini", "model": "gemini-2.5-flash"}},
+            "image": {"default": {"provider": "openai", "model": "gpt-image-1"}},
+        }
+        brand.save()
+
+        form = BrandAIDefaultsForm(instance=brand)
+        assert form.fields["ai_text_provider"].initial == "gemini"
+        assert form.fields["ai_text_model"].initial == "gemini-2.5-flash"
+        assert form.fields["ai_image_provider"].initial == "openai"
+        assert form.fields["ai_image_model"].initial == "gpt-image-1"

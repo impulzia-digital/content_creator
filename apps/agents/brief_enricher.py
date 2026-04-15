@@ -13,7 +13,6 @@ from typing import Any
 from apps.agents.base import AgentContext, AgentResult, BaseAgent
 from apps.content.models import AgentRun
 from apps.integrations.base import TextGenerationRequest
-from apps.integrations.registry import get_text_provider
 
 
 class BriefEnricherAgent(BaseAgent):
@@ -62,13 +61,13 @@ Genera un brief estructurado con este JSON schema:
 
     async def _do_execute(self, context: AgentContext) -> AgentResult:
         system, user = await self.build_prompt(context)
-        provider = get_text_provider()
+        provider, generation_config = self.resolve_text_generation(context)
 
         response = await provider.generate(
             TextGenerationRequest(
                 system_prompt=system,
                 user_prompt=user,
-                model="gpt-4o-mini",
+                model=generation_config.model,
                 temperature=0.7,
                 response_format="json_object",
             )
@@ -84,6 +83,6 @@ Genera un brief estructurado con este JSON schema:
             success=True,
             data=data,
             cost_usd=response.cost_usd,
-            provider="openai",
+            provider=generation_config.provider,
             model=response.model,
         )

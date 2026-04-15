@@ -24,7 +24,7 @@ from apps.agents.prompts import carousel_prompt
 from apps.assets.models import Asset
 from apps.content.models import AgentRun
 from apps.integrations.base import ImageGenerationRequest, TextGenerationRequest
-from apps.integrations.registry import get_image_provider, get_storage_provider, get_text_provider
+from apps.integrations.registry import get_storage_provider
 
 
 class CarouselAgent(BaseAgent):
@@ -69,8 +69,8 @@ Genera la estructura del carrusel en JSON:
         return raw_output
 
     async def _do_execute(self, context: AgentContext) -> AgentResult:
-        text_provider = get_text_provider()
-        image_provider = get_image_provider()
+        text_provider, text_config = self.resolve_text_generation(context)
+        image_provider, image_config = self.resolve_image_generation(context)
         storage = get_storage_provider()
 
         # Paso 1: Generar estructura del carrusel
@@ -79,7 +79,7 @@ Genera la estructura del carrusel en JSON:
             TextGenerationRequest(
                 system_prompt=system,
                 user_prompt=user,
-                model="gpt-4o",  # Modelo más potente para estructuras complejas
+                model=text_config.model,
                 temperature=0.7,
                 max_tokens=3000,
                 response_format="json_object",
@@ -107,6 +107,7 @@ Genera la estructura del carrusel en JSON:
                     prompt=visual_prompt,
                     width=1080,
                     height=1350,
+                    model=image_config.model,
                 )
             )
             total_cost += image_response.cost_usd
@@ -136,7 +137,11 @@ Genera la estructura del carrusel en JSON:
                         height=image_height,
                         position=slide["slide_number"] - 1,
                         generation_prompt=visual_prompt,
-                        generation_params=slide,
+                        generation_params={
+                            **slide,
+                            "_text_generation": text_config.as_dict(),
+                            "_image_generation": image_config.as_dict(),
+                        },
                     )
                     await asset.asave()
                     assets_created.append({
@@ -166,7 +171,11 @@ Genera la estructura del carrusel en JSON:
                         height=image_height,
                         position=slide["slide_number"] - 1,
                         generation_prompt=visual_prompt,
-                        generation_params=slide,
+                        generation_params={
+                            **slide,
+                            "_text_generation": text_config.as_dict(),
+                            "_image_generation": image_config.as_dict(),
+                        },
                     )
                     await asset.asave()
                     assets_created.append({
@@ -189,6 +198,6 @@ Genera la estructura del carrusel en JSON:
                 "num_slides": len(slides),
             },
             cost_usd=total_cost,
-            provider="openai",
+            provider=image_config.provider,
             model=structure_response.model,
         )

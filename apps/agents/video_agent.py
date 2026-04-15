@@ -19,7 +19,6 @@ from apps.agents.prompts import video_prompt
 from apps.assets.models import Asset
 from apps.content.models import AgentRun
 from apps.integrations.base import TextGenerationRequest
-from apps.integrations.registry import get_text_provider
 
 
 class VideoAgent(BaseAgent):
@@ -73,7 +72,7 @@ Genera el script del reel en JSON:
         return raw_output
 
     async def _do_execute(self, context: AgentContext) -> AgentResult:
-        text_provider = get_text_provider()
+        text_provider, generation_config = self.resolve_text_generation(context)
 
         # Paso 1: Generar script del video
         system, user = await self.build_prompt(context)
@@ -81,7 +80,7 @@ Genera el script del reel en JSON:
             TextGenerationRequest(
                 system_prompt=system,
                 user_prompt=user,
-                model="gpt-4o",
+                model=generation_config.model,
                 temperature=0.7,
                 max_tokens=3000,
                 response_format="json_object",
@@ -101,6 +100,6 @@ Genera el script del reel en JSON:
                 "note": "Script generado. Rendering se ejecuta como tarea separada.",
             },
             cost_usd=script_response.cost_usd,
-            provider="openai",
+            provider=generation_config.provider,
             model=script_response.model,
         )

@@ -1,9 +1,11 @@
+{% load content_extras %}
 <table class="min-w-full divide-y divide-gray-200 text-sm bg-white rounded-xl shadow overflow-hidden">
   <thead class="bg-gray-50">
     <tr>
       <th class="px-4 py-2 text-left text-gray-500">Título</th>
       <th class="px-4 py-2 text-left text-gray-500">Tipo</th>
       <th class="px-4 py-2 text-left text-gray-500">Estado</th>
+      <th class="px-4 py-2 text-left text-gray-500">Costo actual</th>
       <th class="px-4 py-2 text-left text-gray-500">Prioridad</th>
       <th class="px-4 py-2 text-left text-gray-500">Fecha</th>
     </tr>
@@ -25,11 +27,12 @@
           {{ brief.get_status_display }}
         </span>
       </td>
+      <td class="px-4 py-3 text-gray-500">{% if brief.total_cost_usd %}{{ brief.total_cost_usd|format_cost }}{% else %}—{% endif %}</td>
       <td class="px-4 py-3 text-gray-500">{{ brief.priority }}</td>
       <td class="px-4 py-3 text-gray-500">{{ brief.created_at|date:"d M H:i" }}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="5" class="px-4 py-6 text-center text-gray-400">Sin resultados.</td></tr>
+    <tr><td colspan="6" class="px-4 py-6 text-center text-gray-400">Sin resultados.</td></tr>
     {% endfor %}
   </tbody>
 </table>

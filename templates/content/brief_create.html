@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block title %}Nuevo brief{% endblock %}
 
 {% block content %}
@@ -54,6 +55,77 @@
     </div>
   </div>
 
+  <div class="rounded-xl border border-indigo-100 bg-indigo-50/60 p-4 space-y-4">
+    <div>
+      <h2 class="text-sm font-semibold text-indigo-900">Overrides de IA</h2>
+      <p class="text-xs text-indigo-700 mt-1">
+        Opcional. Si lo dejas vacío, el brief hereda la configuración de la marca.
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {# ── Texto ── #}
+      <div class="space-y-3" data-capability="text">
+        <h3 class="text-sm font-medium text-gray-800">Texto</h3>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Provider</label>
+          <select name="text_provider_override"
+            class="ai-provider-select w-full rounded-lg border-gray-300"
+            data-capability="text">
+            {% for val, label in text_provider_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Modelo</label>
+          <select name="text_model_select"
+            class="ai-model-select w-full rounded-lg border-gray-300"
+            data-capability="text">
+            <option value="">— Usar default —</option>
+            <option value="__custom__">✏️ Modelo personalizado…</option>
+          </select>
+        </div>
+        <div class="ai-custom-model hidden">
+          <label class="block text-xs font-medium text-gray-700 mb-1">ID del modelo</label>
+          <input type="text" name="text_model_custom"
+            class="w-full rounded-lg border-gray-300"
+            placeholder="Ej: {{ default_text_model }}">
+        </div>
+      </div>
+
+      {# ── Imagen ── #}
+      <div class="space-y-3" data-capability="image">
+        <h3 class="text-sm font-medium text-gray-800">Imagen</h3>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Provider</label>
+          <select name="image_provider_override"
+            class="ai-provider-select w-full rounded-lg border-gray-300"
+            data-capability="image">
+            {% for val, label in image_provider_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Modelo</label>
+          <select name="image_model_select"
+            class="ai-model-select w-full rounded-lg border-gray-300"
+            data-capability="image">
+            <option value="">— Usar default —</option>
+            <option value="__custom__">✏️ Modelo personalizado…</option>
+          </select>
+        </div>
+        <div class="ai-custom-model hidden">
+          <label class="block text-xs font-medium text-gray-700 mb-1">ID del modelo</label>
+          <input type="text" name="image_model_custom"
+            class="w-full rounded-lg border-gray-300"
+            placeholder="Ej: {{ default_image_model }}">
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="pt-2">
     <button type="submit" class="bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 font-medium">
       Crear brief
@@ -61,4 +133,9 @@
     <a href="{% url 'content:brief_list' %}" class="ml-3 text-sm text-gray-500 hover:text-gray-700">Cancelar</a>
   </div>
 </form>
+
+<script>
+  window.__MODEL_CATALOG__ = {{ model_catalog_json|safe }};
+</script>
+<script src="{% static 'js/ai-model-selector.js' %}"></script>
 {% endblock %}

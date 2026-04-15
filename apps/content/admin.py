@@ -29,7 +29,7 @@ class ContentBriefAdmin(admin.ModelAdmin):
         ("Formato", {"fields": ("content_type", "aspect_ratio", "num_slides")}),
         ("Estado", {"fields": ("status", "error_message")}),
         ("Programación", {"fields": ("scheduled_for", "published_at")}),
-        ("IA", {"fields": ("enriched_brief",)}),
+        ("IA", {"fields": ("enriched_brief", "ai_provider_overrides")}),
         ("Meta", {"fields": ("tags", "priority")}),
     )
 

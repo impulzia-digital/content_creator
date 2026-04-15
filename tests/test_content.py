@@ -2,6 +2,7 @@
 
 import pytest
 from django.template import Context, Template
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
@@ -42,6 +43,7 @@ class TestContentBrief:
         assert brief.num_slides == 1
         assert brief.tags == []
         assert brief.enriched_brief is None
+        assert brief.ai_provider_overrides == {}
         assert brief.seed_key is None
         assert brief.scheduled_for is None
 
@@ -186,6 +188,60 @@ class TestAgentRun:
         assert brief.agent_runs.count() == 3
 
 
+@pytest.mark.django_db
+class TestBriefTotalCost:
+    def test_total_cost_sums_successful_runs(self, brief):
+        AgentRun.objects.create(
+            brief=brief, agent_type=AgentRun.AgentType.BRIEF_ENRICHER,
+            status=AgentRun.RunStatus.SUCCESS, cost_usd=0.0010,
+        )
+        AgentRun.objects.create(
+            brief=brief, agent_type=AgentRun.AgentType.IMAGE,
+            status=AgentRun.RunStatus.SUCCESS, cost_usd=0.0400,
+        )
+        AgentRun.objects.create(
+            brief=brief, agent_type=AgentRun.AgentType.COPY,
+            status=AgentRun.RunStatus.SUCCESS, cost_usd=0.0005,
+        )
+        assert float(brief.total_cost_usd) == pytest.approx(0.0415, abs=1e-4)
+
+    def test_total_cost_excludes_failed_runs(self, brief):
+        AgentRun.objects.create(
+            brief=brief, agent_type=AgentRun.AgentType.BRIEF_ENRICHER,
+            status=AgentRun.RunStatus.FAILED, cost_usd=0.0,
+        )
+        AgentRun.objects.create(
+            brief=brief, agent_type=AgentRun.AgentType.BRIEF_ENRICHER,
+            status=AgentRun.RunStatus.SUCCESS, cost_usd=0.0010,
+        )
+        assert float(brief.total_cost_usd) == pytest.approx(0.0010, abs=1e-4)
+
+    def test_total_cost_zero_when_no_runs(self, brief):
+        assert brief.total_cost_usd == 0
+
+
+class TestFormatCostFilter:
+    def test_format_cost_zero(self):
+        template = Template("{% load content_extras %}{{ value|format_cost }}")
+        assert template.render(Context({"value": 0})) == "$0.00"
+
+    def test_format_cost_small(self):
+        template = Template("{% load content_extras %}{{ value|format_cost }}")
+        assert template.render(Context({"value": 0.0012})) == "$0.0012"
+
+    def test_format_cost_medium(self):
+        template = Template("{% load content_extras %}{{ value|format_cost }}")
+        assert template.render(Context({"value": 0.08})) == "$0.08"
+
+    def test_format_cost_large(self):
+        template = Template("{% load content_extras %}{{ value|format_cost }}")
+        assert template.render(Context({"value": 1.23})) == "$1.23"
+
+    def test_format_cost_none(self):
+        template = Template("{% load content_extras %}{{ value|format_cost }}")
+        assert template.render(Context({"value": None})) == "$0.00"
+
+
 class TestContentTemplateFilters:
     def test_is_list_filter_does_not_split_strings(self):
         template = Template(
@@ -204,3 +260,105 @@ class TestContentTemplateFilters:
         rendered = template.render(Context({"value": ["uno", "dos"]}))
 
         assert rendered == "uno, dos"
+
+
+@pytest.mark.django_db
+class TestBriefCreateView:
+    def test_get_context_has_model_catalog(self, client, brand, user, membership):
+        import json
+
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+        response = client.get(reverse("content:brief_create"))
+
+        assert response.status_code == 200
+        assert "model_catalog_json" in response.context
+        catalog = json.loads(response.context["model_catalog_json"])
+        assert "openai" in catalog
+        assert "gemini" in catalog
+        assert "imagen" in catalog
+
+    def test_get_context_has_provider_choices(self, client, brand, user, membership):
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+        response = client.get(reverse("content:brief_create"))
+
+        assert response.status_code == 200
+        choices = response.context["provider_choices"]
+        provider_values = [v for v, _ in choices]
+        assert "openai" in provider_values
+        assert "gemini" in provider_values
+        assert "imagen" in provider_values
+
+    def test_post_with_model_selector(self, client, brand, user, membership):
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+        response = client.post(reverse("content:brief_create"), {
+            "title": "Test selector",
+            "raw_idea": "Testing model selector",
+            "content_type": "post",
+            "aspect_ratio": "4:5",
+            "num_slides": "1",
+            "priority": "5",
+            "text_provider_override": "gemini",
+            "text_model_select": "gemini-2.5-flash",
+            "image_provider_override": "imagen",
+            "image_model_select": "imagen-4.0-generate-001",
+        })
+
+        assert response.status_code == 302
+        brief = ContentBrief.objects.get(title="Test selector")
+        assert brief.ai_provider_overrides["text"]["default"]["provider"] == "gemini"
+        assert brief.ai_provider_overrides["text"]["default"]["model"] == "gemini-2.5-flash"
+        assert brief.ai_provider_overrides["image"]["default"]["provider"] == "imagen"
+        assert brief.ai_provider_overrides["image"]["default"]["model"] == "imagen-4.0-generate-001"
+
+    def test_post_with_custom_model(self, client, brand, user, membership):
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+        response = client.post(reverse("content:brief_create"), {
+            "title": "Test custom",
+            "raw_idea": "Testing custom model",
+            "content_type": "post",
+            "aspect_ratio": "4:5",
+            "num_slides": "1",
+            "priority": "5",
+            "text_provider_override": "openai",
+            "text_model_select": "__custom__",
+            "text_model_custom": "gpt-future-99",
+        })
+
+        assert response.status_code == 302
+        brief = ContentBrief.objects.get(title="Test custom")
+        assert brief.ai_provider_overrides["text"]["default"]["model"] == "gpt-future-99"
+
+    def test_post_no_overrides(self, client, brand, user, membership):
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+        response = client.post(reverse("content:brief_create"), {
+            "title": "Test no override",
+            "raw_idea": "No AI overrides",
+            "content_type": "post",
+            "aspect_ratio": "4:5",
+            "num_slides": "1",
+            "priority": "5",
+        })
+
+        assert response.status_code == 302
+        brief = ContentBrief.objects.get(title="Test no override")
+        assert brief.ai_provider_overrides == {}

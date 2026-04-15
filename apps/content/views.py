@@ -1,11 +1,62 @@
 """Views del backoffice – Briefs y Variantes."""
 
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
 from apps.content.tasks import generate_content_task
+from apps.integrations.model_catalog import get_catalog_json, get_providers_for
+
+
+_TEXT_PROVIDER_CHOICES = [("", "Usar defaults de la marca")] + [
+    (provider, provider.title()) for provider in get_providers_for("text")
+]
+_IMAGE_PROVIDER_CHOICES = [("", "Usar defaults de la marca")] + [
+    (provider, "Imagen (Google)" if provider == "imagen" else provider.title())
+    for provider in get_providers_for("image")
+]
+
+_TEXT_PROVIDER_VALUES = {value for value, _ in _TEXT_PROVIDER_CHOICES if value}
+_IMAGE_PROVIDER_VALUES = {value for value, _ in _IMAGE_PROVIDER_CHOICES if value}
+
+
+def _build_ai_provider_overrides(request) -> dict:
+    overrides: dict[str, dict] = {}
+
+    text_provider = request.POST.get("text_provider_override", "").strip().lower()
+    if text_provider and text_provider not in _TEXT_PROVIDER_VALUES:
+        text_provider = ""
+    text_model_select = request.POST.get("text_model_select", "").strip()
+    text_model_custom = request.POST.get("text_model_custom", "").strip()
+    text_model = text_model_custom if text_model_select == "__custom__" else text_model_select
+    # Fallback al viejo campo por compatibilidad
+    if not text_model:
+        text_model = request.POST.get("text_model_override", "").strip()
+    if text_provider or text_model:
+        overrides.setdefault("text", {}).setdefault("default", {})
+        if text_provider:
+            overrides["text"]["default"]["provider"] = text_provider
+        if text_model:
+            overrides["text"]["default"]["model"] = text_model
+
+    image_provider = request.POST.get("image_provider_override", "").strip().lower()
+    if image_provider and image_provider not in _IMAGE_PROVIDER_VALUES:
+        image_provider = ""
+    image_model_select = request.POST.get("image_model_select", "").strip()
+    image_model_custom = request.POST.get("image_model_custom", "").strip()
+    image_model = image_model_custom if image_model_select == "__custom__" else image_model_select
+    if not image_model:
+        image_model = request.POST.get("image_model_override", "").strip()
+    if image_provider or image_model:
+        overrides.setdefault("image", {}).setdefault("default", {})
+        if image_provider:
+            overrides["image"]["default"]["provider"] = image_provider
+        if image_model:
+            overrides["image"]["default"]["model"] = image_model
+
+    return overrides
 
 
 @login_required
@@ -54,11 +105,18 @@ def brief_create(request):
             aspect_ratio=request.POST.get("aspect_ratio", "4:5"),
             num_slides=int(request.POST.get("num_slides", 1)),
             priority=int(request.POST.get("priority", 5)),
+            ai_provider_overrides=_build_ai_provider_overrides(request),
         )
         return redirect("content:brief_detail", brief_id=brief.pk)
 
     return render(request, "content/brief_create.html", {
         "type_choices": ContentBrief.ContentType.choices,
+        "provider_choices": _IMAGE_PROVIDER_CHOICES,
+        "default_text_model": settings.GEMINI_TEXT_MODEL,
+        "default_image_model": settings.IMAGEN_MODEL if settings.IMAGE_PROVIDER == "imagen" else settings.GEMINI_IMAGE_MODEL,
+        "model_catalog_json": get_catalog_json(),
+        "text_provider_choices": _TEXT_PROVIDER_CHOICES,
+        "image_provider_choices": _IMAGE_PROVIDER_CHOICES,
     })
 
 
@@ -67,7 +125,17 @@ def brief_detail(request, brief_id):
     """Detalle de un brief con sus variantes y ejecuciones."""
     brief = get_object_or_404(ContentBrief, pk=brief_id, brand=request.brand)
     variants = brief.variants.prefetch_related("assets", "approval_requests").all()
-    runs = brief.agent_runs.all()[:20]
+
+    # Mostrar solo las ejecuciones de la última generación exitosa
+    latest_enricher = brief.agent_runs.filter(
+        agent_type=AgentRun.AgentType.BRIEF_ENRICHER,
+        status=AgentRun.RunStatus.SUCCESS,
+    ).first()  # ya ordena por -created_at
+
+    if latest_enricher:
+        runs = brief.agent_runs.filter(created_at__gte=latest_enricher.created_at)
+    else:
+        runs = brief.agent_runs.all()[:20]
 
     context = {
         "brief": brief,

@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Costo aproximado por 1M tokens (USD) — se actualiza periódicamente
 _COST_PER_1M = {
+    "gpt-5.4": {"input": 2.50, "output": 15.00},
+    "gpt-5.4-mini": {"input": 0.75, "output": 4.50},
+    "gpt-5.4-nano": {"input": 0.20, "output": 1.25},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4o": {"input": 2.50, "output": 10.00},
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
@@ -36,8 +39,8 @@ class OpenAITextProvider(TextProvider):
                 {"role": "user", "content": request.user_prompt},
             ],
             "temperature": request.temperature,
-            "max_tokens": request.max_tokens,
         }
+        kwargs.update(_token_limit_kwargs(request.model, request.max_tokens))
         if request.response_format == "json_object":
             kwargs["response_format"] = {"type": "json_object"}
 
@@ -61,3 +64,9 @@ class OpenAITextProvider(TextProvider):
             cost_usd=cost,
             raw_response=response.model_dump(),
         )
+
+
+def _token_limit_kwargs(model: str, max_tokens: int) -> dict[str, int]:
+    if model.startswith("gpt-5"):
+        return {"max_completion_tokens": max_tokens}
+    return {"max_tokens": max_tokens}

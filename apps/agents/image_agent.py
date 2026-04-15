@@ -15,7 +15,7 @@ from apps.agents.base import AgentContext, AgentResult, BaseAgent
 from apps.assets.models import Asset
 from apps.content.models import AgentRun
 from apps.integrations.base import ImageGenerationRequest, TextGenerationRequest
-from apps.integrations.registry import get_image_provider, get_storage_provider, get_text_provider
+from apps.integrations.registry import get_storage_provider
 
 
 # Aspect ratio → dimensiones
@@ -65,8 +65,8 @@ Genera un prompt de imagen detallado en JSON:
         return raw_output
 
     async def _do_execute(self, context: AgentContext) -> AgentResult:
-        text_provider = get_text_provider()
-        image_provider = get_image_provider()
+        text_provider, text_config = self.resolve_text_generation(context)
+        image_provider, image_config = self.resolve_image_generation(context)
         storage = get_storage_provider()
 
         # Paso 1: Generar prompt visual con LLM
@@ -75,7 +75,7 @@ Genera un prompt de imagen detallado en JSON:
             TextGenerationRequest(
                 system_prompt=system,
                 user_prompt=user,
-                model="gpt-4o-mini",
+                model=text_config.model,
                 temperature=0.7,
                 response_format="json_object",
             )
@@ -90,6 +90,7 @@ Genera un prompt de imagen detallado en JSON:
                 negative_prompt=prompt_data.get("negative_prompt", ""),
                 width=w,
                 height=h,
+                model=image_config.model,
                 style=context.brand.preferred_image_style,
             )
         )
@@ -116,7 +117,11 @@ Genera un prompt de imagen detallado en JSON:
                     height=image_height,
                     position=i,
                     generation_prompt=prompt_data["image_prompt"],
-                    generation_params=prompt_data,
+                    generation_params={
+                        **prompt_data,
+                        "_text_generation": text_config.as_dict(),
+                        "_image_generation": image_config.as_dict(),
+                    },
                 )
                 await asset.asave()
                 assets_created.append({"url": upload.url, "key": upload.key})
@@ -138,7 +143,11 @@ Genera un prompt de imagen detallado en JSON:
                     height=image_height,
                     position=i,
                     generation_prompt=prompt_data["image_prompt"],
-                    generation_params=prompt_data,
+                    generation_params={
+                        **prompt_data,
+                        "_text_generation": text_config.as_dict(),
+                        "_image_generation": image_config.as_dict(),
+                    },
                 )
                 await asset.asave()
                 assets_created.append({"url": upload.url, "key": upload.key})
@@ -156,6 +165,6 @@ Genera un prompt de imagen detallado en JSON:
                 "num_images": len(assets_created),
             },
             cost_usd=total_cost,
-            provider="openai",
+            provider=image_config.provider,
             model=image_response.model,
         )

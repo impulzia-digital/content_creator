@@ -148,9 +148,17 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ── Provider config ──────────────────────────────────────────
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
+GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
 TEXT_PROVIDER = config("TEXT_PROVIDER", default="openai")
-IMAGE_PROVIDER = config("IMAGE_PROVIDER", default="openai")  # openai | fal | replicate
+IMAGE_PROVIDER = config("IMAGE_PROVIDER", default="openai")
 VIDEO_PROVIDER = config("VIDEO_PROVIDER", default="creatomate")  # creatomate | shotstack | fal
+OPENAI_TEXT_MODEL = config("OPENAI_TEXT_MODEL", default="gpt-5.4-mini")
+OPENAI_REASONING_MODEL = config("OPENAI_REASONING_MODEL", default="gpt-5.4")
+OPENAI_IMAGE_MODEL = config("OPENAI_IMAGE_MODEL", default="gpt-image-1")
+GEMINI_TEXT_MODEL = config("GEMINI_TEXT_MODEL", default="gemini-2.5-flash")
+GEMINI_REASONING_MODEL = config("GEMINI_REASONING_MODEL", default="gemini-2.5-pro")
+GEMINI_IMAGE_MODEL = config("GEMINI_IMAGE_MODEL", default="gemini-3-pro-image-preview")
+IMAGEN_MODEL = config("IMAGEN_MODEL", default="imagen-4.0-generate-001")
 
 # ── Meta / Instagram ─────────────────────────────────────────
 META_APP_ID = config("META_APP_ID", default="")

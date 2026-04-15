@@ -59,6 +59,16 @@
 </div>
 {% endif %}
 
+{# ── Costo total ──────────────────────────────── #}
+{% if brief.total_cost_usd %}
+<div class="bg-white rounded-xl shadow p-5 mb-6">
+  <div class="flex items-center justify-between">
+    <h2 class="font-semibold text-gray-800">Costo actual de esta generación</h2>
+    <span class="text-xl font-bold text-indigo-600">{{ brief.total_cost_usd|format_cost }}</span>
+  </div>
+</div>
+{% endif %}
+
 {# ── Variantes ─────────────────────────────────── #}
 <h2 class="text-lg font-semibold text-gray-800 mb-4">Variantes generadas</h2>
 <div class="space-y-4 mb-8">
@@ -102,7 +112,7 @@
     </div>
     {% endif %}
 
-    <p class="text-xs text-gray-400 mt-2">Costo: ${{ variant.generation_cost_usd }}</p>
+    <p class="text-xs text-gray-400 mt-2">Costo: {{ variant.display_generation_cost_usd|format_cost }}</p>
   </div>
   {% empty %}
   <p class="text-gray-400 text-center py-8">No hay variantes generadas aún.</p>
@@ -136,7 +146,7 @@
           </span>
         </td>
         <td class="px-4 py-2 text-gray-500">{% if run.duration_seconds %}{{ run.duration_seconds|floatformat:1 }}s{% else %}—{% endif %}</td>
-        <td class="px-4 py-2 text-gray-500">${{ run.cost_usd }}</td>
+        <td class="px-4 py-2 text-gray-500">{{ run.cost_usd|format_cost }}</td>
         <td class="px-4 py-2 text-gray-500">{{ run.model_used|default:"—" }}</td>
       </tr>
       {% empty %}

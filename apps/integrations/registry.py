@@ -23,20 +23,29 @@ from apps.integrations.base import (
 
 
 @lru_cache
-def get_text_provider() -> TextProvider:
-    provider = getattr(settings, "TEXT_PROVIDER", "openai")
+def get_text_provider(provider: str | None = None) -> TextProvider:
+    provider = (provider or getattr(settings, "TEXT_PROVIDER", "openai")).lower()
     if provider == "openai":
         from apps.integrations.providers.openai_text import OpenAITextProvider
         return OpenAITextProvider()
+    if provider == "gemini":
+        from apps.integrations.providers.gemini_text import GeminiTextProvider
+        return GeminiTextProvider()
     raise ValueError(f"Text provider desconocido: {provider}")
 
 
 @lru_cache
-def get_image_provider() -> ImageProvider:
-    provider = getattr(settings, "IMAGE_PROVIDER", "openai")
+def get_image_provider(provider: str | None = None) -> ImageProvider:
+    provider = (provider or getattr(settings, "IMAGE_PROVIDER", "openai")).lower()
     if provider == "openai":
         from apps.integrations.providers.openai_images import OpenAIImageProvider
         return OpenAIImageProvider()
+    if provider == "gemini":
+        from apps.integrations.providers.gemini_images import GeminiImageProvider
+        return GeminiImageProvider()
+    if provider == "imagen":
+        from apps.integrations.providers.imagen4 import Imagen4ImageProvider
+        return Imagen4ImageProvider()
     raise ValueError(f"Image provider desconocido: {provider}")
 
 

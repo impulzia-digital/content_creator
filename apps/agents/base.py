@@ -15,6 +15,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from apps.integrations.base import ImageProvider, TextProvider
+from apps.integrations.registry import get_image_provider, get_text_provider
+from apps.integrations.routing import ResolvedGenerationConfig, resolve_generation_config
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
 from apps.brands.models import Brand
 
@@ -72,6 +75,7 @@ class BaseAgent(abc.ABC):
         6. Retornar AgentResult
         """
         start = time.monotonic()
+        context.extra["generation_config"] = {}
 
         # Crear registro de ejecución
         run = await self._create_run(context)
@@ -80,13 +84,19 @@ class BaseAgent(abc.ABC):
             result = await self._do_execute(context)
             elapsed = time.monotonic() - start
             result.duration_seconds = elapsed
+            generation_config = context.extra.get("generation_config") or {}
+            if generation_config:
+                run.input_data = {
+                    **run.input_data,
+                    "generation_config": generation_config,
+                }
 
             # Actualizar run
             run.status = AgentRun.RunStatus.SUCCESS
             run.output_data = result.data
             run.cost_usd = result.cost_usd
             run.provider = result.provider
-            run.model = result.model
+            run.model_used = result.model
             run.duration_seconds = elapsed
             await run.asave()
 
@@ -98,6 +108,12 @@ class BaseAgent(abc.ABC):
 
         except Exception as exc:
             elapsed = time.monotonic() - start
+            generation_config = context.extra.get("generation_config") or {}
+            if generation_config:
+                run.input_data = {
+                    **run.input_data,
+                    "generation_config": generation_config,
+                }
             run.status = AgentRun.RunStatus.FAILED
             run.error_detail = str(exc)
             run.duration_seconds = elapsed
@@ -129,3 +145,36 @@ class BaseAgent(abc.ABC):
         )
         await run.asave()
         return run
+
+    def resolve_text_generation(
+        self, context: AgentContext
+    ) -> tuple[TextProvider, ResolvedGenerationConfig]:
+        config = resolve_generation_config(
+            capability="text",
+            agent_type=self.agent_type,
+            brand_defaults=context.brand.ai_provider_defaults,
+            brief_overrides=context.brief.ai_provider_overrides,
+        )
+        self._store_generation_config(context, "text", config)
+        return get_text_provider(config.provider), config
+
+    def resolve_image_generation(
+        self, context: AgentContext
+    ) -> tuple[ImageProvider, ResolvedGenerationConfig]:
+        config = resolve_generation_config(
+            capability="image",
+            agent_type=self.agent_type,
+            brand_defaults=context.brand.ai_provider_defaults,
+            brief_overrides=context.brief.ai_provider_overrides,
+        )
+        self._store_generation_config(context, "image", config)
+        return get_image_provider(config.provider), config
+
+    def _store_generation_config(
+        self,
+        context: AgentContext,
+        key: str,
+        config: ResolvedGenerationConfig,
+    ) -> None:
+        generation_config = context.extra.setdefault("generation_config", {})
+        generation_config[key] = config.as_dict()

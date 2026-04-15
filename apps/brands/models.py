@@ -43,6 +43,16 @@ class Brand(TimeStampedModel):
         default=list, blank=True,
         help_text='Ej: ["4:5", "1:1", "9:16"]',
     )
+    ai_provider_defaults = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Overrides por capacidad/agente. Ej: "
+            '{"text": {"default": {"provider": "gemini", "model": "gemini-2.5-flash"}, '
+            '"carousel": {"model": "gemini-2.5-pro"}}, '
+            '"image": {"default": {"provider": "gemini", "model": "gemini-3-pro-image-preview"}}}'
+        ),
+    )
 
     is_active = models.BooleanField(default=True)
 
