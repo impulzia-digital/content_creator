@@ -7,9 +7,13 @@ from .models import Brand, InstagramAccount, Membership
 
 _TEXT_PROVIDERS = [("", "— Sin override —")] + [(p, p.title()) for p in get_providers_for("text")]
 _IMAGE_PROVIDERS = [("", "— Sin override —")] + [(p, p.title()) for p in get_providers_for("image")]
+_VIDEO_PROVIDERS = [("", "— Sin override —")] + [
+    (p, "Google Veo" if p == "veo" else p.title()) for p in get_providers_for("video")
+]
 
 _TEXT_MODEL_CHOICES = [("", "— Default del sistema —"), ("__custom__", "✏️ Personalizado…")]
 _IMAGE_MODEL_CHOICES = [("", "— Default del sistema —"), ("__custom__", "✏️ Personalizado…")]
+_VIDEO_MODEL_CHOICES = [("", "— Default del sistema —"), ("__custom__", "✏️ Personalizado…")]
 
 # Pre-populate with all text models, grouped by provider
 for _prov in get_providers_for("text"):
@@ -17,6 +21,9 @@ for _prov in get_providers_for("text"):
 
 for _prov in get_providers_for("image"):
     _IMAGE_MODEL_CHOICES.extend(get_catalog_as_choices(_prov, "image"))
+
+for _prov in get_providers_for("video"):
+    _VIDEO_MODEL_CHOICES.extend(get_catalog_as_choices(_prov, "video"))
 
 
 class BrandAIDefaultsForm(forms.ModelForm):
@@ -44,6 +51,16 @@ class BrandAIDefaultsForm(forms.ModelForm):
         required=False, label="Modelo de imagen (custom)",
         help_text="Solo si elegiste 'Personalizado' arriba.",
     )
+    ai_video_provider = forms.ChoiceField(
+        choices=_VIDEO_PROVIDERS, required=False, label="Provider de video",
+    )
+    ai_video_model = forms.ChoiceField(
+        choices=_VIDEO_MODEL_CHOICES, required=False, label="Modelo de video",
+    )
+    ai_video_model_custom = forms.CharField(
+        required=False, label="Modelo de video (custom)",
+        help_text="Solo si elegiste 'Personalizado' arriba.",
+    )
 
     class Meta:
         model = Brand
@@ -55,6 +72,7 @@ class BrandAIDefaultsForm(forms.ModelForm):
             defaults = self.instance.ai_provider_defaults or {}
             text_cfg = (defaults.get("text") or {}).get("default") or {}
             image_cfg = (defaults.get("image") or {}).get("default") or {}
+            video_cfg = (defaults.get("video") or {}).get("default") or {}
 
             self.fields["ai_text_provider"].initial = text_cfg.get("provider", "")
             text_model = text_cfg.get("model", "")
@@ -71,6 +89,14 @@ class BrandAIDefaultsForm(forms.ModelForm):
                 self.fields["ai_image_model_custom"].initial = image_model
             else:
                 self.fields["ai_image_model"].initial = image_model
+
+            self.fields["ai_video_provider"].initial = video_cfg.get("provider", "")
+            video_model = video_cfg.get("model", "")
+            if video_model and not any(v == video_model for v, _ in _VIDEO_MODEL_CHOICES):
+                self.fields["ai_video_model"].initial = "__custom__"
+                self.fields["ai_video_model_custom"].initial = video_model
+            else:
+                self.fields["ai_video_model"].initial = video_model
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -113,6 +139,25 @@ class BrandAIDefaultsForm(forms.ModelForm):
             defaults["image"].pop("default", None)
             if not defaults["image"]:
                 del defaults["image"]
+
+        # Hydrate video defaults, preserving any per-agent overrides
+        video_provider = self.cleaned_data.get("ai_video_provider", "").strip()
+        video_model_select = self.cleaned_data.get("ai_video_model", "").strip()
+        video_model_custom = self.cleaned_data.get("ai_video_model_custom", "").strip()
+        video_model = video_model_custom if video_model_select == "__custom__" else video_model_select
+
+        video_default = {}
+        if video_provider:
+            video_default["provider"] = video_provider
+        if video_model:
+            video_default["model"] = video_model
+
+        if video_default:
+            defaults.setdefault("video", {})["default"] = video_default
+        elif "video" in defaults and "default" in defaults.get("video", {}):
+            defaults["video"].pop("default", None)
+            if not defaults["video"]:
+                del defaults["video"]
 
         instance.ai_provider_defaults = defaults
         if commit:
@@ -176,8 +221,11 @@ class BrandAdmin(admin.ModelAdmin):
                     "ai_image_provider",
                     "ai_image_model",
                     "ai_image_model_custom",
+                    "ai_video_provider",
+                    "ai_video_model",
+                    "ai_video_model_custom",
                 ),
-                "description": "Configura el proveedor y modelo por defecto para texto e imagen.",
+                "description": "Configura el proveedor y modelo por defecto para texto, imagen y video.",
             },
         ),
         (

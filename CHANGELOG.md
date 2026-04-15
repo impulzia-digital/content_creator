@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-04-15
+
+- Soporte de video promovido a capability de primera clase: catálogo ampliado, defaults por marca/brief y selector de provider/modelo para reels en el formulario.
+- Implementados providers de video para Creatomate y Google Veo, con registro/routing real, settings dedicados y persistencia automática de assets de video y thumbnail desde `VideoAgent`.
+- Backoffice endurecido para generaciones incompletas: el detalle del brief detecta reels sin asset renderizado, permite regeneración y mejora el streaming MP4 con soporte de byte ranges.
+- Compatibilidad de Gemini/Veo corregida para payloads no soportados por la API actual, eliminando flags rechazados y moviendo restricciones visuales al prompt cuando aplica.
+
 ## 2026-04-14
 
 - Seed versionada del negocio añadida con comando `seed_business_data`, migración de `seed_key` y datos iniciales de Impulzia.

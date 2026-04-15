@@ -2,10 +2,9 @@
 
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from decimal import Decimal
+from unittest.mock import AsyncMock, patch
 
-from apps.agents.base import AgentContext, AgentResult, BaseAgent
+from apps.agents.base import AgentContext, AgentResult
 from apps.agents.brief_enricher import BriefEnricherAgent
 from apps.agents.copy_agent import CopyAgent
 from apps.agents.hashtag_agent import HashtagAgent
@@ -13,11 +12,13 @@ from apps.agents.image_agent import ImageAgent, ASPECT_RATIOS
 from apps.agents.carousel_agent import CarouselAgent
 from apps.agents.video_agent import VideoAgent
 from apps.agents.orchestrator import ContentOrchestrator
+from apps.assets.models import Asset
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
 from apps.integrations.base import (
     ImageGenerationResponse,
     TextGenerationResponse,
     UploadResult,
+    VideoGenerationResponse,
 )
 from apps.integrations.routing import ResolvedGenerationConfig
 
@@ -55,6 +56,24 @@ def _mock_text_resolution(agent, provider, config):
 def _mock_image_resolution(agent, provider, config):
     def _resolver(context):
         agent._store_generation_config(context, "image", config)
+        return provider, config
+
+    return _resolver
+
+
+def _resolved_video(provider: str = "creatomate", model: str = "creatomate-renderscript"):
+    return ResolvedGenerationConfig(
+        capability="video",
+        provider=provider,
+        model=model,
+        provider_source="test",
+        model_source="test",
+    )
+
+
+def _mock_video_resolution(agent, provider, config):
+    def _resolver(context):
+        agent._store_generation_config(context, "video", config)
         return provider, config
 
     return _resolver
@@ -552,9 +571,10 @@ class TestVideoAgent:
         assert "30-60" in user
 
     @pytest.mark.asyncio
-    async def test_execute_returns_script(self, agent, reel_brief, brand):
+    async def test_execute_renders_video_assets(self, agent, reel_brief, brand):
         reel_brief.enriched_brief = {"tema": "Git", "hooks": ["Stop doing this"]}
         await reel_brief.asave()
+        variant = await ContentVariant.objects.acreate(brief=reel_brief, version=1)
 
         script = {
             "title": "3 errores con Git",
@@ -571,21 +591,44 @@ class TestVideoAgent:
             model="gpt-4o",
             cost_usd=0.005,
         )
-        ctx = AgentContext(brief=reel_brief, brand=brand)
+        video_response = VideoGenerationResponse(
+            video_bytes=b"video-bytes",
+            thumbnail_bytes=b"thumb-bytes",
+            model="creatomate-renderscript",
+            duration_seconds=8,
+            content_type="video/mp4",
+            thumbnail_content_type="image/jpeg",
+            cost_usd=0.09,
+        )
+        upload_results = [
+            UploadResult(url="https://cdn.example.com/reel.mp4", key="reel.mp4", size_bytes=12345),
+            UploadResult(url="https://cdn.example.com/reel.jpg", key="reel.jpg", size_bytes=4567),
+        ]
+        ctx = AgentContext(brief=reel_brief, brand=brand, variant=variant)
 
-        mock_provider = AsyncMock()
-        mock_provider.generate.return_value = mock_response
+        mock_text_provider = AsyncMock()
+        mock_text_provider.generate.return_value = mock_response
+        mock_video_provider = AsyncMock()
+        mock_video_provider.generate.return_value = video_response
 
         with patch.object(
             agent,
             "resolve_text_generation",
-            side_effect=_mock_text_resolution(agent, mock_provider, _resolved_text(model="gpt-4o")),
-        ):
+            side_effect=_mock_text_resolution(agent, mock_text_provider, _resolved_text(model="gpt-4o")),
+        ), patch.object(
+            agent,
+            "resolve_video_generation",
+            side_effect=_mock_video_resolution(agent, mock_video_provider, _resolved_video()),
+        ), patch("apps.agents.video_agent.get_storage_provider") as mock_storage:
+            mock_storage.return_value = AsyncMock(upload_bytes=AsyncMock(side_effect=upload_results))
             result = await agent.execute(ctx)
 
         assert result.success is True
         assert result.data["script"]["title"] == "3 errores con Git"
-        assert result.data["rendering_pending"] is True
+        assert result.data["rendered"] is True
+        assert len(result.data["assets"]) == 2
+        assert await Asset.objects.filter(variant=variant, asset_type=Asset.AssetType.VIDEO).acount() == 1
+        assert await Asset.objects.filter(variant=variant, asset_type=Asset.AssetType.THUMBNAIL).acount() == 1
 
 
 # ── Orchestrator ──────────────────────────────────────────────

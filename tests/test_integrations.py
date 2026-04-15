@@ -13,7 +13,6 @@ from apps.integrations.base import (
     TextGenerationResponse,
     UploadResult,
     VideoGenerationRequest,
-    VideoGenerationResponse,
 )
 from apps.integrations.routing import resolve_generation_config
 
@@ -89,6 +88,7 @@ class TestVideoGenerationRequest:
         assert req.width == 1080
         assert req.height == 1920
         assert req.output_format == "mp4"
+        assert req.model == ""
 
 
 class TestInstagramDataclasses:
@@ -612,6 +612,103 @@ class TestImagen4ImageProvider:
         assert result.cost_usd == pytest.approx(expected_cost)
 
 
+class TestCreatomateVideoProvider:
+    @pytest.mark.asyncio
+    async def test_generate_polls_until_render_ready(self, settings):
+        import httpx
+
+        settings.CREATOMATE_API_KEY = "ct-test"
+        from apps.integrations.providers.creatomate_video import CreatomateVideoProvider
+
+        provider = CreatomateVideoProvider(api_key="ct-test")
+
+        create_resp = httpx.Response(
+            200,
+            json={"id": "render_1", "status": "planned"},
+            request=httpx.Request("POST", "https://api.creatomate.com/v2/renders"),
+        )
+        poll_resp = httpx.Response(
+            200,
+            json={
+                "id": "render_1",
+                "status": "succeeded",
+                "url": "https://cdn.creatomate.com/render.mp4",
+                "snapshot_url": "https://cdn.creatomate.com/render.jpg",
+                "duration": 8,
+            },
+            request=httpx.Request("GET", "https://api.creatomate.com/v2/renders/render_1"),
+        )
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=create_resp), patch(
+            "httpx.AsyncClient.get", new_callable=AsyncMock, return_value=poll_resp,
+        ), patch("apps.integrations.providers.creatomate_video.asyncio.sleep", new_callable=AsyncMock):
+            result = await provider.generate(
+                VideoGenerationRequest(
+                    render_spec={"output_format": "mp4", "width": 1080, "height": 1920, "elements": []},
+                    model="creatomate-renderscript",
+                )
+            )
+
+        assert result.video_url == "https://cdn.creatomate.com/render.mp4"
+        assert result.thumbnail_url == "https://cdn.creatomate.com/render.jpg"
+        assert result.duration_seconds == 8
+
+    @pytest.mark.asyncio
+    async def test_generate_requires_payload(self, settings):
+        settings.CREATOMATE_API_KEY = "ct-test"
+        from apps.integrations.providers.creatomate_video import CreatomateVideoProvider
+
+        provider = CreatomateVideoProvider(api_key="ct-test")
+
+        with pytest.raises(ValueError, match="template_id o render_spec"):
+            await provider.generate(VideoGenerationRequest(model="creatomate-renderscript"))
+
+
+class TestVeoVideoProvider:
+    @pytest.mark.asyncio
+    async def test_generate_downloads_video_bytes(self, settings):
+        settings.GEMINI_API_KEY = "gm-test"
+        settings.VEO_VIDEO_MODEL = "veo-3.1-generate-preview"
+
+        from apps.integrations.providers.veo_video import VeoVideoProvider
+
+        provider = VeoVideoProvider(api_key="gm-test")
+        pending_operation = MagicMock(done=False)
+        completed_operation = MagicMock(done=True)
+        completed_operation.response = MagicMock(
+            generated_videos=[MagicMock(video=MagicMock(uri="gs://video", mime_type="video/mp4"))]
+        )
+
+        with patch(
+            "apps.integrations.providers.veo_video.asyncio.to_thread",
+            new_callable=AsyncMock,
+            side_effect=[pending_operation, completed_operation, b"video-bytes"],
+        ) as mock_to_thread, patch("apps.integrations.providers.veo_video.asyncio.sleep", new_callable=AsyncMock):
+            result = await provider.generate(
+                VideoGenerationRequest(
+                    prompt="Vertical cinematic video",
+                    negative_prompt="blurry, watermark, distorted anatomy",
+                    model="veo-3.1-generate-preview",
+                    duration_seconds=7,
+                    width=1080,
+                    height=1920,
+                )
+            )
+
+        generate_call_kwargs = mock_to_thread.call_args_list[0].kwargs
+        generate_config = generate_call_kwargs["config"]
+        dumped_config = generate_config.model_dump(exclude_none=True)
+        assert "generate_audio" not in dumped_config
+        assert "enhance_prompt" not in dumped_config
+        assert "negative_prompt" not in dumped_config
+        assert generate_call_kwargs["prompt"] == "Vertical cinematic video\n\nAvoid: blurry, watermark, distorted anatomy"
+
+        assert result.video_bytes == b"video-bytes"
+        assert result.model == "veo-3.1-generate-preview"
+        assert result.duration_seconds == 8
+        assert result.content_type == "video/mp4"
+
+
 # ── Meta Instagram Publisher ─────────────────────────────────
 
 
@@ -872,14 +969,27 @@ class TestRegistry:
         assert isinstance(provider, GeminiImageProvider)
         get_image_provider.cache_clear()
 
-    def test_get_video_provider_not_implemented(self, settings):
+    def test_get_video_provider_creatomate(self, settings):
         settings.VIDEO_PROVIDER = "creatomate"
+        settings.CREATOMATE_API_KEY = "ct-test"
 
         from apps.integrations.registry import get_video_provider
         get_video_provider.cache_clear()
 
-        with pytest.raises(NotImplementedError):
-            get_video_provider()
+        provider = get_video_provider()
+        from apps.integrations.providers.creatomate_video import CreatomateVideoProvider
+        assert isinstance(provider, CreatomateVideoProvider)
+        get_video_provider.cache_clear()
+
+    def test_get_video_provider_veo(self, settings):
+        settings.GEMINI_API_KEY = "gm-test"
+
+        from apps.integrations.registry import get_video_provider
+        get_video_provider.cache_clear()
+
+        provider = get_video_provider("veo")
+        from apps.integrations.providers.veo_video import VeoVideoProvider
+        assert isinstance(provider, VeoVideoProvider)
         get_video_provider.cache_clear()
 
 
@@ -981,6 +1091,35 @@ class TestRoutingResolution:
 
         assert resolved.model == "gpt-5.4-mini"
 
+    def test_resolve_video_defaults(self, settings):
+        settings.VIDEO_PROVIDER = "veo"
+        settings.VEO_VIDEO_MODEL = "veo-3.1-fast-generate-preview"
+
+        resolved = resolve_generation_config(capability="video", agent_type="video")
+
+        assert resolved.provider == "veo"
+        assert resolved.model == "veo-3.1-fast-generate-preview"
+
+    def test_resolve_video_brief_override(self, settings):
+        settings.VIDEO_PROVIDER = "creatomate"
+        settings.CREATOMATE_VIDEO_MODEL = "creatomate-renderscript"
+
+        resolved = resolve_generation_config(
+            capability="video",
+            agent_type="video",
+            brief_overrides={
+                "video": {
+                    "default": {
+                        "provider": "veo",
+                        "model": "veo-3.1-generate-preview",
+                    }
+                }
+            },
+        )
+
+        assert resolved.provider == "veo"
+        assert resolved.model == "veo-3.1-generate-preview"
+
 
 # ── Model Catalog ────────────────────────────────────────────
 
@@ -994,7 +1133,9 @@ class TestModelCatalog:
         assert "gpt-5.4" in values
         assert "gpt-5.4-mini" in values
         assert "gpt-5.4-nano" in values
-        assert len(models) == 3
+        assert "gpt-4o" in values
+        assert "gpt-4o-mini" in values
+        assert len(models) >= 7
 
     def test_get_models_for_gemini_text(self):
         from apps.integrations.model_catalog import get_models_for
@@ -1013,6 +1154,15 @@ class TestModelCatalog:
         assert "gpt-image-1" in values
         assert "gpt-image-1.5" in values
         assert "gpt-image-1-mini" in values
+        assert "dall-e-3" in values
+
+    def test_get_models_for_video(self):
+        from apps.integrations.model_catalog import get_models_for
+
+        models = get_models_for("veo", "video")
+        values = [m.value for m in models]
+        assert "veo-3.1-generate-preview" in values
+        assert "veo-3.1-fast-generate-preview" in values
 
     def test_get_models_for_imagen(self):
         from apps.integrations.model_catalog import get_models_for
@@ -1044,6 +1194,13 @@ class TestModelCatalog:
         assert "openai" in providers
         assert "gemini" in providers
         assert "imagen" in providers
+
+    def test_get_providers_for_video(self):
+        from apps.integrations.model_catalog import get_providers_for
+
+        providers = get_providers_for("video")
+        assert "creatomate" in providers
+        assert "veo" in providers
 
     def test_get_catalog_as_choices(self):
         from apps.integrations.model_catalog import get_catalog_as_choices
@@ -1082,11 +1239,12 @@ class TestModelCatalog:
         assert "openai" in data
         assert "gemini" in data
         assert "imagen" in data
+        assert "veo" in data
         assert "text" in data["openai"]
         assert "image" in data["openai"]
         assert "image" in data["imagen"]
         assert isinstance(data["openai"]["text"], list)
-        assert len(data["openai"]["text"]) == 3
+        assert len(data["openai"]["text"]) >= 7
 
     def test_get_catalog_json_parses(self):
         import json
@@ -1102,7 +1260,7 @@ class TestModelCatalog:
 
         for m in _CATALOG:
             assert m.provider, f"Model {m.value} missing provider"
-            assert m.capability in ("text", "image"), f"Model {m.value} bad capability"
+            assert m.capability in ("text", "image", "video"), f"Model {m.value} bad capability"
             assert m.value, f"Model {m.value} missing value"
             assert m.label, f"Model {m.value} missing label"
             assert m.tier in ("Potente", "Balanceado", "Eficiente"), f"Model {m.value} bad tier"
@@ -1110,7 +1268,7 @@ class TestModelCatalog:
     def test_every_tier_has_at_least_one_model_per_capability(self):
         from apps.integrations.model_catalog import _CATALOG
 
-        for cap in ("text", "image"):
+        for cap in ("text", "image", "video"):
             tiers = {m.tier for m in _CATALOG if m.capability == cap}
             assert "Potente" in tiers
             assert "Balanceado" in tiers
@@ -1120,7 +1278,7 @@ class TestModelCatalog:
 # ── Imagen 4 Provider ────────────────────────────────────────
 
 
-class TestImagen4ImageProvider:
+class TestImagen4ImageProviderCompatibility:
     @pytest.mark.asyncio
     async def test_generate_returns_image_bytes(self):
         from apps.integrations.providers.imagen4 import Imagen4ImageProvider

@@ -78,8 +78,11 @@ class VideoGenerationRequest:
     # Template-based
     template_id: str = ""
     template_params: dict = field(default_factory=dict)
+    render_spec: dict = field(default_factory=dict)
     # Generative
     prompt: str = ""
+    negative_prompt: str = ""
+    model: str = ""
     # Common
     duration_seconds: float = 15.0
     width: int = 1080
@@ -90,10 +93,14 @@ class VideoGenerationRequest:
 @dataclass
 class VideoGenerationResponse:
     video_url: str = ""
+    video_bytes: bytes | None = None
     thumbnail_url: str = ""
+    thumbnail_bytes: bytes | None = None
     duration_seconds: float = 0.0
     model: str = ""
     cost_usd: float = 0.0
+    content_type: str = "video/mp4"
+    thumbnail_content_type: str = "image/jpeg"
     raw_response: dict = field(default_factory=dict)
 
 

@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django import template
 
 register = template.Library()
@@ -12,21 +10,15 @@ def is_list(value):
 
 @register.filter
 def format_cost(value):
-    """Formatea un costo USD de forma legible.
-
-    - >= $1.00   → $1.23
-    - >= $0.01   → $0.08
-    - < $0.01    → $0.0012
-    - 0          → $0.00
-    """
     try:
-        val = float(value)
+        amount = float(value or 0)
     except (TypeError, ValueError):
+        amount = 0.0
+
+    if amount == 0:
         return "$0.00"
-    if val == 0:
-        return "$0.00"
-    if val >= 1:
-        return f"${val:,.2f}"
-    if val >= 0.01:
-        return f"${val:.2f}"
-    return f"${val:.4f}"
+    if amount >= 1:
+        return f"${amount:.2f}"
+    if amount >= 0.01:
+        return f"${amount:.2f}"
+    return f"${amount:.4f}"

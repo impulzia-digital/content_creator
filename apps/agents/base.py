@@ -15,8 +15,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from apps.integrations.base import ImageProvider, TextProvider
-from apps.integrations.registry import get_image_provider, get_text_provider
+from apps.integrations.base import ImageProvider, TextProvider, VideoProvider
+from apps.integrations.registry import get_image_provider, get_text_provider, get_video_provider
 from apps.integrations.routing import ResolvedGenerationConfig, resolve_generation_config
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
 from apps.brands.models import Brand
@@ -169,6 +169,18 @@ class BaseAgent(abc.ABC):
         )
         self._store_generation_config(context, "image", config)
         return get_image_provider(config.provider), config
+
+    def resolve_video_generation(
+        self, context: AgentContext
+    ) -> tuple[VideoProvider, ResolvedGenerationConfig]:
+        config = resolve_generation_config(
+            capability="video",
+            agent_type=self.agent_type,
+            brand_defaults=context.brand.ai_provider_defaults,
+            brief_overrides=context.brief.ai_provider_overrides,
+        )
+        self._store_generation_config(context, "video", config)
+        return get_video_provider(config.provider), config
 
     def _store_generation_config(
         self,

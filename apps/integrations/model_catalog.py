@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Literal
 
 
-CapabilityType = Literal["text", "image"]
+CapabilityType = Literal["text", "image", "video"]
 TierType = Literal["Potente", "Balanceado", "Eficiente"]
 
 
@@ -52,6 +52,38 @@ _CATALOG: list[ModelEntry] = [
         label="GPT-5.4 Nano",
         tier="Eficiente",
         description="Ultra-eficiente para tareas de alto volumen.",
+    ),
+    ModelEntry(
+        provider="openai",
+        capability="text",
+        value="gpt-4.1",
+        label="GPT-4.1",
+        tier="Potente",
+        description="Modelo legacy de alta capacidad para compatibilidad.",
+    ),
+    ModelEntry(
+        provider="openai",
+        capability="text",
+        value="gpt-4o",
+        label="GPT-4o",
+        tier="Balanceado",
+        description="Omnimodel estable con amplia compatibilidad.",
+    ),
+    ModelEntry(
+        provider="openai",
+        capability="text",
+        value="gpt-4.1-mini",
+        label="GPT-4.1 Mini",
+        tier="Balanceado",
+        description="Versión ligera de GPT-4.1 para workloads mixtos.",
+    ),
+    ModelEntry(
+        provider="openai",
+        capability="text",
+        value="gpt-4o-mini",
+        label="GPT-4o Mini",
+        tier="Eficiente",
+        description="Compatibilidad legacy de bajo costo y alta velocidad.",
     ),
     # ── Gemini Text ──────────────────────────────────────────
     ModelEntry(
@@ -132,6 +164,14 @@ _CATALOG: list[ModelEntry] = [
         tier="Eficiente",
         description="Generación rápida y económica.",
     ),
+    ModelEntry(
+        provider="openai",
+        capability="image",
+        value="dall-e-3",
+        label="DALL-E 3",
+        tier="Balanceado",
+        description="Compatibilidad legacy para workflows que aún usan DALL-E 3.",
+    ),
     # ── Gemini Image (Nano Banana) ───────────────────────────
     ModelEntry(
         provider="gemini",
@@ -188,6 +228,53 @@ _CATALOG: list[ModelEntry] = [
         tier="Eficiente",
         api_family="imagen",
         description="Generación rápida, ideal para iteración. Hasta 4 imágenes.",
+    ),
+    # ── Video / Creatomate ───────────────────────────────────
+    ModelEntry(
+        provider="creatomate",
+        capability="video",
+        value="creatomate-template",
+        label="Creatomate Template",
+        tier="Potente",
+        description="Renderiza reels desde un template configurado en Creatomate.",
+    ),
+    ModelEntry(
+        provider="creatomate",
+        capability="video",
+        value="creatomate-renderscript",
+        label="Creatomate RenderScript",
+        tier="Balanceado",
+        is_recommended=True,
+        description="Genera reels automáticamente desde el guion sin depender de template fijo.",
+    ),
+    # ── Video / Google Veo ───────────────────────────────────
+    ModelEntry(
+        provider="veo",
+        capability="video",
+        value="veo-3.1-generate-preview",
+        label="Veo 3.1",
+        tier="Potente",
+        is_preview=True,
+        description="Video generativo premium para clips cortos con alto nivel visual.",
+    ),
+    ModelEntry(
+        provider="veo",
+        capability="video",
+        value="veo-3.1-fast-generate-preview",
+        label="Veo 3.1 Fast",
+        tier="Balanceado",
+        is_preview=True,
+        is_recommended=True,
+        description="Generación más rápida para iteración y testing creativo.",
+    ),
+    ModelEntry(
+        provider="veo",
+        capability="video",
+        value="veo-3.1-lite-generate-preview",
+        label="Veo 3.1 Lite",
+        tier="Eficiente",
+        is_preview=True,
+        description="Variante más económica para alto volumen.",
     ),
 ]
 

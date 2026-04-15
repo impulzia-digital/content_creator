@@ -3,6 +3,7 @@
 {% block title %}{{ brief.title }}{% endblock %}
 
 {% block content %}
+{% load content_extras %}
 {# ── Header ───────────────────────────────────── #}
 <div class="flex items-start justify-between mb-6">
   <div>
@@ -21,14 +22,21 @@
     </p>
   </div>
   <div class="flex gap-2" id="actions">
-    {% if brief.status == 'draft' or brief.status == 'failed' %}
+    {% if can_generate %}
       <button hx-post="{% url 'content:brief_generate' brief.pk %}" hx-target="#actions" hx-swap="innerHTML"
         class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-indigo-700">
-        🚀 Generar contenido
+        {% if generation_incomplete %}🔁 Regenerar contenido{% else %}🚀 Generar contenido{% endif %}
       </button>
     {% endif %}
   </div>
 </div>
+
+{% if generation_incomplete %}
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+  <p class="text-amber-900 text-sm font-medium">Generación incompleta</p>
+  <p class="text-amber-800 text-sm mt-1">{{ missing_output_message }}</p>
+</div>
+{% endif %}
 
 {# ── Idea original ────────────────────────────── #}
 <div class="bg-white rounded-xl shadow p-5 mb-6">

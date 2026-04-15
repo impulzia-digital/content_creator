@@ -12,6 +12,7 @@ _COMPLEX_TEXT_AGENT_TYPES = {"carousel", "video"}
 _SUPPORTED_PROVIDERS = {
     "text": {"openai", "gemini"},
     "image": {"openai", "gemini", "imagen"},
+    "video": {"creatomate", "veo"},
 }
 
 
@@ -113,6 +114,8 @@ def _resolve_field(
 def _default_provider_for(capability: str) -> str:
     if capability == "image":
         return getattr(settings, "IMAGE_PROVIDER", "openai")
+    if capability == "video":
+        return getattr(settings, "VIDEO_PROVIDER", "creatomate")
     return getattr(settings, "TEXT_PROVIDER", "openai")
 
 
@@ -123,6 +126,11 @@ def _default_model_for(*, provider: str, capability: str, agent_type: str) -> st
         if provider == "imagen":
             return getattr(settings, "IMAGEN_MODEL", "imagen-4.0-generate-001")
         return getattr(settings, "OPENAI_IMAGE_MODEL", "gpt-image-1")
+
+    if capability == "video":
+        if provider == "veo":
+            return getattr(settings, "VEO_VIDEO_MODEL", "veo-3.1-generate-preview")
+        return getattr(settings, "CREATOMATE_VIDEO_MODEL", "creatomate-renderscript")
 
     is_complex_agent = agent_type in _COMPLEX_TEXT_AGENT_TYPES
     if provider == "gemini":

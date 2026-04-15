@@ -1,10 +1,11 @@
 """Tests para apps.content — ContentBrief, ContentVariant, AgentRun."""
 
 import pytest
+from unittest.mock import patch
 from django.template import Context, Template
 from django.urls import reverse
-from django.utils import timezone
 
+from apps.assets.models import Asset
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
 
 
@@ -56,7 +57,7 @@ class TestContentBrief:
         assert ContentBrief.objects.for_brand(brand).count() == 1
 
     def test_brief_ordering(self, brand, user):
-        b1 = ContentBrief.objects.create(brand=brand, title="A", raw_idea="a", created_by=user)
+        ContentBrief.objects.create(brand=brand, title="A", raw_idea="a", created_by=user)
         b2 = ContentBrief.objects.create(brand=brand, title="B", raw_idea="b", created_by=user)
         briefs = list(ContentBrief.objects.all())
         assert briefs[0] == b2  # Más reciente primero
@@ -103,9 +104,9 @@ class TestContentVariant:
             ContentVariant.objects.create(brief=brief, version=1)
 
     def test_multiple_variants(self, brief):
-        v1 = ContentVariant.objects.create(brief=brief, version=1)
-        v2 = ContentVariant.objects.create(brief=brief, version=2)
-        v3 = ContentVariant.objects.create(brief=brief, version=3)
+        ContentVariant.objects.create(brief=brief, version=1)
+        ContentVariant.objects.create(brief=brief, version=2)
+        ContentVariant.objects.create(brief=brief, version=3)
         assert brief.variants.count() == 3
 
     def test_variant_defaults(self, brief):
@@ -362,3 +363,63 @@ class TestBriefCreateView:
         assert response.status_code == 302
         brief = ContentBrief.objects.get(title="Test no override")
         assert brief.ai_provider_overrides == {}
+
+
+@pytest.mark.django_db
+class TestBriefDetailAndGenerateView:
+    def _activate_brand(self, client, brand, user):
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+    def test_detail_flags_incomplete_reel_generation(self, client, reel_brief, brand, user, membership):
+        reel_brief.status = ContentBrief.Status.REVIEW
+        reel_brief.save(update_fields=["status"])
+
+        variant = ContentVariant.objects.create(brief=reel_brief, version=1)
+        variant.caption = "Caption without rendered video"
+        variant.save(update_fields=["caption"])
+
+        self._activate_brand(client, brand, user)
+        response = client.get(reverse("content:brief_detail", args=[reel_brief.pk]))
+
+        assert response.status_code == 200
+        assert response.context["generation_incomplete"] is True
+        assert response.context["can_generate"] is True
+        assert "sin asset de video" in response.context["missing_output_message"]
+
+    def test_generate_allows_incomplete_reel_regeneration(self, client, reel_brief, brand, user, membership):
+        reel_brief.status = ContentBrief.Status.REVIEW
+        reel_brief.save(update_fields=["status"])
+        ContentVariant.objects.create(brief=reel_brief, version=1)
+
+        self._activate_brand(client, brand, user)
+
+        with patch("apps.content.views.generate_content_task.delay") as mock_delay:
+            response = client.post(reverse("content:brief_generate", args=[reel_brief.pk]))
+
+        reel_brief.refresh_from_db()
+        assert response.status_code == 302
+        assert reel_brief.status == ContentBrief.Status.GENERATING
+        mock_delay.assert_called_once_with(str(reel_brief.pk))
+
+    def test_generate_keeps_review_locked_when_reel_has_video(self, client, reel_brief, brand, user, membership, variant):
+        reel_brief.status = ContentBrief.Status.REVIEW
+        reel_brief.save(update_fields=["status"])
+        variant.brief = reel_brief
+        variant.save(update_fields=["brief"])
+        Asset.objects.create(
+            variant=variant,
+            asset_type=Asset.AssetType.VIDEO,
+            file_url="https://cdn.example.com/reel.mp4",
+            file_key="brands/test/reel.mp4",
+            mime_type="video/mp4",
+        )
+
+        self._activate_brand(client, brand, user)
+        response = client.post(reverse("content:brief_generate", args=[reel_brief.pk]))
+
+        reel_brief.refresh_from_db()
+        assert response.status_code == 302
+        assert reel_brief.status == ContentBrief.Status.REVIEW

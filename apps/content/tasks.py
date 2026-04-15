@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
     name="content.generate_content",
     queue="generation",
     max_retries=2,
-    soft_time_limit=300,
-    time_limit=360,
+    soft_time_limit=840,
+    time_limit=900,
 )
 def generate_content_task(self, brief_id: str) -> dict:
     """

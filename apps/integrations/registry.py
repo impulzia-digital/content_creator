@@ -50,9 +50,15 @@ def get_image_provider(provider: str | None = None) -> ImageProvider:
 
 
 @lru_cache
-def get_video_provider() -> VideoProvider:
-    provider = getattr(settings, "VIDEO_PROVIDER", "creatomate")
-    raise NotImplementedError(f"Video provider '{provider}' pendiente de implementar")
+def get_video_provider(provider: str | None = None) -> VideoProvider:
+    provider = (provider or getattr(settings, "VIDEO_PROVIDER", "creatomate")).lower()
+    if provider == "creatomate":
+        from apps.integrations.providers.creatomate_video import CreatomateVideoProvider
+        return CreatomateVideoProvider()
+    if provider == "veo":
+        from apps.integrations.providers.veo_video import VeoVideoProvider
+        return VeoVideoProvider()
+    raise ValueError(f"Video provider desconocido: {provider}")
 
 
 @lru_cache

@@ -151,6 +151,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ── Provider config ──────────────────────────────────────────
 OPENAI_API_KEY = config("OPENAI_API_KEY", default="")
 GEMINI_API_KEY = config("GEMINI_API_KEY", default="")
+CREATOMATE_API_KEY = config("CREATOMATE_API_KEY", default="")
 TEXT_PROVIDER = config("TEXT_PROVIDER", default="openai")
 IMAGE_PROVIDER = config("IMAGE_PROVIDER", default="openai")
 VIDEO_PROVIDER = config("VIDEO_PROVIDER", default="creatomate")  # creatomate | shotstack | fal
@@ -161,6 +162,16 @@ GEMINI_TEXT_MODEL = config("GEMINI_TEXT_MODEL", default="gemini-2.5-flash")
 GEMINI_REASONING_MODEL = config("GEMINI_REASONING_MODEL", default="gemini-2.5-pro")
 GEMINI_IMAGE_MODEL = config("GEMINI_IMAGE_MODEL", default="gemini-3-pro-image-preview")
 IMAGEN_MODEL = config("IMAGEN_MODEL", default="imagen-4.0-generate-001")
+CREATOMATE_VIDEO_MODEL = config("CREATOMATE_VIDEO_MODEL", default="creatomate-renderscript")
+CREATOMATE_REEL_TEMPLATE_ID = config("CREATOMATE_REEL_TEMPLATE_ID", default="")
+CREATOMATE_API_BASE_URL = config("CREATOMATE_API_BASE_URL", default="https://api.creatomate.com/v2")
+CREATOMATE_POLL_INTERVAL_SECONDS = config("CREATOMATE_POLL_INTERVAL_SECONDS", cast=float, default=5.0)
+CREATOMATE_MAX_WAIT_SECONDS = config("CREATOMATE_MAX_WAIT_SECONDS", cast=float, default=600.0)
+VEO_VIDEO_MODEL = config("VEO_VIDEO_MODEL", default="veo-3.1-generate-preview")
+VEO_VIDEO_RESOLUTION = config("VEO_VIDEO_RESOLUTION", default="720p")
+VEO_PERSON_GENERATION = config("VEO_PERSON_GENERATION", default="allow_all")
+VEO_POLL_INTERVAL_SECONDS = config("VEO_POLL_INTERVAL_SECONDS", cast=float, default=10.0)
+VEO_MAX_WAIT_SECONDS = config("VEO_MAX_WAIT_SECONDS", cast=float, default=600.0)
 
 # ── Meta / Instagram ─────────────────────────────────────────
 META_APP_ID = config("META_APP_ID", default="")

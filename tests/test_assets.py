@@ -1,7 +1,9 @@
 """Tests para apps.assets — Asset."""
 
 import pytest
+from unittest.mock import MagicMock
 from django.test import override_settings
+from django.urls import reverse
 from unittest.mock import patch
 
 from apps.assets.models import Asset
@@ -142,3 +144,53 @@ class TestAsset:
         )
 
         assert asset.public_url == "https://cdn.example.com/img.jpg"
+
+
+@pytest.mark.django_db
+class TestServeAssetView:
+    @override_settings(USE_S3=True, AWS_STORAGE_BUCKET_NAME="test-bucket")
+    def test_streams_full_asset(self, client):
+        mock_body = MagicMock()
+        mock_body.iter_chunks.return_value = [b"video-bytes"]
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {
+            "Body": mock_body,
+            "ContentType": "video/mp4",
+            "ContentLength": 11,
+            "ETag": '"abc"',
+        }
+
+        with patch("apps.assets.views.get_s3_client", return_value=mock_s3):
+            response = client.get(reverse("assets:serve_asset", args=["brands/test/reel.mp4"]))
+
+        assert response.status_code == 200
+        assert response["Content-Type"] == "video/mp4"
+        assert response["Accept-Ranges"] == "bytes"
+        mock_s3.get_object.assert_called_once_with(Bucket="test-bucket", Key="brands/test/reel.mp4")
+
+    @override_settings(USE_S3=True, AWS_STORAGE_BUCKET_NAME="test-bucket")
+    def test_streams_partial_asset_when_range_requested(self, client):
+        mock_body = MagicMock()
+        mock_body.iter_chunks.return_value = [b"video"]
+        mock_s3 = MagicMock()
+        mock_s3.get_object.return_value = {
+            "Body": mock_body,
+            "ContentType": "video/mp4",
+            "ContentLength": 5,
+            "ContentRange": "bytes 0-4/11",
+        }
+
+        with patch("apps.assets.views.get_s3_client", return_value=mock_s3):
+            response = client.get(
+                reverse("assets:serve_asset", args=["brands/test/reel.mp4"]),
+                HTTP_RANGE="bytes=0-4",
+            )
+
+        assert response.status_code == 206
+        assert response["Content-Range"] == "bytes 0-4/11"
+        assert response["Accept-Ranges"] == "bytes"
+        mock_s3.get_object.assert_called_once_with(
+            Bucket="test-bucket",
+            Key="brands/test/reel.mp4",
+            Range="bytes=0-4",
+        )

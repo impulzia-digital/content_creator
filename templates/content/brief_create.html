@@ -63,7 +63,7 @@
       </p>
     </div>
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
       {# ── Texto ── #}
       <div class="space-y-3" data-capability="text">
         <h3 class="text-sm font-medium text-gray-800">Texto</h3>
@@ -121,6 +121,36 @@
           <input type="text" name="image_model_custom"
             class="w-full rounded-lg border-gray-300"
             placeholder="Ej: {{ default_image_model }}">
+        </div>
+      </div>
+
+      {# ── Video ── #}
+      <div class="space-y-3" data-capability="video">
+        <h3 class="text-sm font-medium text-gray-800">Video</h3>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Provider</label>
+          <select name="video_provider_override"
+            class="ai-provider-select w-full rounded-lg border-gray-300"
+            data-capability="video">
+            {% for val, label in video_provider_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Modelo</label>
+          <select name="video_model_select"
+            class="ai-model-select w-full rounded-lg border-gray-300"
+            data-capability="video">
+            <option value="">— Usar default —</option>
+            <option value="__custom__">✏️ Modelo personalizado…</option>
+          </select>
+        </div>
+        <div class="ai-custom-model hidden">
+          <label class="block text-xs font-medium text-gray-700 mb-1">ID del modelo</label>
+          <input type="text" name="video_model_custom"
+            class="w-full rounded-lg border-gray-300"
+            placeholder="Ej: {{ default_video_model }}">
         </div>
       </div>
     </div>
