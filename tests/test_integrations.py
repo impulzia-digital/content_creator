@@ -306,6 +306,7 @@ class TestOpenAIImageProvider:
     @pytest.mark.parametrize(
         ("model", "expected_cost"),
         [
+            ("gpt-image-2", 0.041),
             ("gpt-image-1.5", 0.050),
             ("gpt-image-1", 0.063),
             ("gpt-image-1-mini", 0.015),
@@ -327,7 +328,12 @@ class TestOpenAIImageProvider:
             new_callable=AsyncMock, return_value=mock_response,
         ) as mock_generate:
             result = await provider.generate(
-                ImageGenerationRequest(prompt="a sunset", model=model)
+                ImageGenerationRequest(
+                    prompt="a sunset",
+                    model=model,
+                    width=1024,
+                    height=1536,
+                )
             )
 
         assert result.cost_usd == pytest.approx(expected_cost)
@@ -336,7 +342,39 @@ class TestOpenAIImageProvider:
         assert mock_generate.call_args.kwargs["quality"] == "medium"
 
     @pytest.mark.asyncio
-    async def test_generate_returns_urls(self):
+    async def test_generate_returns_urls(self, settings):
+        from apps.integrations.providers.openai_images import OpenAIImageProvider
+
+        settings.OPENAI_IMAGE_MODEL = "gpt-image-2"
+
+        mock_img = MagicMock()
+        mock_img.url = "https://oaidalleapiprodscus.blob.core.windows.net/img.jpg"
+
+        mock_response = MagicMock()
+        mock_response.data = [mock_img]
+
+        provider = OpenAIImageProvider(api_key="sk-test")
+
+        with patch.object(
+            provider._client.images, "generate",
+            new_callable=AsyncMock, return_value=mock_response,
+        ) as mock_generate:
+            result = await provider.generate(
+                ImageGenerationRequest(prompt="a sunset", width=1024, height=1536)
+            )
+
+        assert len(result.image_urls) == 1
+        assert result.image_bytes == []
+        assert "blob.core.windows.net" in result.image_urls[0]
+        assert result.cost_usd == pytest.approx(0.041)
+        assert result.width == 1024
+        assert result.height == 1536
+        assert result.model == "gpt-image-2"
+        assert result.content_type == "image/jpeg"
+        assert mock_generate.call_args.kwargs["model"] == "gpt-image-2"
+
+    @pytest.mark.asyncio
+    async def test_generate_normalizes_gpt_image_2_instagram_size(self):
         from apps.integrations.providers.openai_images import OpenAIImageProvider
 
         mock_img = MagicMock()
@@ -350,18 +388,39 @@ class TestOpenAIImageProvider:
         with patch.object(
             provider._client.images, "generate",
             new_callable=AsyncMock, return_value=mock_response,
-        ):
+        ) as mock_generate:
             result = await provider.generate(
-                ImageGenerationRequest(prompt="a sunset")
+                ImageGenerationRequest(prompt="a sunset", model="gpt-image-2", width=1080, height=1350)
             )
 
-        assert len(result.image_urls) == 1
-        assert result.image_bytes == []
-        assert "blob.core.windows.net" in result.image_urls[0]
-        assert result.cost_usd == pytest.approx(0.063)
-        assert result.width == 1024
-        assert result.height == 1536
-        assert result.content_type == "image/jpeg"
+        assert result.width == 1088
+        assert result.height == 1344
+        assert mock_generate.call_args.kwargs["size"] == "1088x1344"
+
+    @pytest.mark.asyncio
+    async def test_generate_preserves_valid_gpt_image_2_4k_size(self):
+        from apps.integrations.providers.openai_images import OpenAIImageProvider
+
+        mock_img = MagicMock()
+        mock_img.url = "https://oaidalleapiprodscus.blob.core.windows.net/img.jpg"
+
+        mock_response = MagicMock()
+        mock_response.data = [mock_img]
+
+        provider = OpenAIImageProvider(api_key="sk-test")
+
+        with patch.object(
+            provider._client.images, "generate",
+            new_callable=AsyncMock, return_value=mock_response,
+        ) as mock_generate:
+            result = await provider.generate(
+                ImageGenerationRequest(prompt="a sunset", model="gpt-image-2", width=3840, height=2160)
+            )
+
+        assert result.width == 3840
+        assert result.height == 2160
+        assert result.cost_usd == pytest.approx(0.2162109375)
+        assert mock_generate.call_args.kwargs["size"] == "3840x2160"
 
     @pytest.mark.asyncio
     async def test_generate_decodes_base64_images(self):
@@ -1047,6 +1106,15 @@ class TestRoutingResolution:
         assert resolved.model == "gemini-3-pro-image-preview"
         assert resolved.provider_source == "brief.image.default.provider"
 
+    def test_resolve_openai_image_uses_settings_default_model(self, settings):
+        settings.IMAGE_PROVIDER = "openai"
+        settings.OPENAI_IMAGE_MODEL = "gpt-image-2"
+
+        resolved = resolve_generation_config(capability="image", agent_type="image")
+
+        assert resolved.provider == "openai"
+        assert resolved.model == "gpt-image-2"
+
     def test_resolve_imagen_provider(self, settings):
         settings.IMAGE_PROVIDER = "openai"
 
@@ -1151,6 +1219,7 @@ class TestModelCatalog:
 
         models = get_models_for("openai", "image")
         values = [m.value for m in models]
+        assert "gpt-image-2" in values
         assert "gpt-image-1" in values
         assert "gpt-image-1.5" in values
         assert "gpt-image-1-mini" in values

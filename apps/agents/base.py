@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from apps.integrations.base import ImageProvider, TextProvider, VideoProvider
+from apps.integrations.image_dimensions import resolve_image_dimensions
 from apps.integrations.registry import get_image_provider, get_text_provider, get_video_provider
 from apps.integrations.routing import ResolvedGenerationConfig, resolve_generation_config
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
@@ -169,6 +170,12 @@ class BaseAgent(abc.ABC):
         )
         self._store_generation_config(context, "image", config)
         return get_image_provider(config.provider), config
+
+    def resolve_image_dimensions(self, context: AgentContext) -> tuple[int, int]:
+        return resolve_image_dimensions(
+            aspect_ratio=context.brief.aspect_ratio,
+            image_overrides=(context.brief.ai_provider_overrides or {}).get("image"),
+        )
 
     def resolve_video_generation(
         self, context: AgentContext

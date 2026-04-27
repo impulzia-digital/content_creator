@@ -8,6 +8,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.assets.models import Asset
 from apps.content.models import AgentRun, ContentBrief, ContentVariant
 from apps.content.tasks import generate_content_task
+from apps.integrations.image_dimensions import (
+    IMAGE_RESOLUTION_CHOICES,
+    VALID_IMAGE_RESOLUTION_PRESETS,
+    get_image_dimensions,
+)
 from apps.integrations.model_catalog import get_catalog_json, get_providers_for
 
 
@@ -72,14 +77,27 @@ def _build_ai_provider_overrides(request) -> dict:
     image_model_select = request.POST.get("image_model_select", "").strip()
     image_model_custom = request.POST.get("image_model_custom", "").strip()
     image_model = image_model_custom if image_model_select == "__custom__" else image_model_select
+    image_resolution_preset = request.POST.get("image_resolution_preset", "").strip().lower()
+    if image_resolution_preset not in VALID_IMAGE_RESOLUTION_PRESETS:
+        image_resolution_preset = ""
     if not image_model:
         image_model = request.POST.get("image_model_override", "").strip()
-    if image_provider or image_model:
+    if image_provider or image_model or image_resolution_preset:
         overrides.setdefault("image", {}).setdefault("default", {})
         if image_provider:
             overrides["image"]["default"]["provider"] = image_provider
         if image_model:
             overrides["image"]["default"]["model"] = image_model
+        if image_resolution_preset:
+            width, height = get_image_dimensions(
+                request.POST.get("aspect_ratio", "4:5"),
+                image_resolution_preset,
+            )
+            overrides["image"]["default"].update({
+                "resolution_preset": image_resolution_preset,
+                "width": width,
+                "height": height,
+            })
 
     video_provider = request.POST.get("video_provider_override", "").strip().lower()
     if video_provider and video_provider not in _VIDEO_PROVIDER_VALUES:
@@ -159,6 +177,7 @@ def brief_create(request):
             else settings.OPENAI_IMAGE_MODEL
         ),
         "default_video_model": settings.VEO_VIDEO_MODEL if settings.VIDEO_PROVIDER == "veo" else settings.CREATOMATE_VIDEO_MODEL,
+        "image_resolution_choices": IMAGE_RESOLUTION_CHOICES,
         "model_catalog_json": get_catalog_json(),
         "text_provider_choices": _TEXT_PROVIDER_CHOICES,
         "image_provider_choices": _IMAGE_PROVIDER_CHOICES,

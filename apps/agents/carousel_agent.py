@@ -87,6 +87,7 @@ Genera la estructura del carrusel en JSON:
         )
         carousel_data = await self.parse_output(structure_response.text, context)
         slides = carousel_data.get("slides", [])
+        image_width, image_height = self.resolve_image_dimensions(context)
 
         # Paso 2: Generar imagen para cada slide
         total_cost = structure_response.cost_usd
@@ -99,20 +100,20 @@ Genera la estructura del carrusel en JSON:
                 f"Text overlay: '{slide.get('headline', '')}'. "
                 f"Style: {carousel_data.get('visual_style', 'clean, modern, branded')}. "
                 f"Brand colors: {context.brand.color_primary} {context.brand.color_secondary}. "
-                f"Instagram carousel slide, 4:5 aspect ratio, high quality."
+                f"Instagram carousel slide, {context.brief.aspect_ratio} aspect ratio, high quality."
             )
 
             image_response = await image_provider.generate(
                 ImageGenerationRequest(
                     prompt=visual_prompt,
-                    width=1080,
-                    height=1350,
+                    width=image_width,
+                    height=image_height,
                     model=image_config.model,
                 )
             )
             total_cost += image_response.cost_usd
-            image_width = image_response.width or 1080
-            image_height = image_response.height or 1350
+            rendered_width = image_response.width or image_width
+            rendered_height = image_response.height or image_height
             content_type = image_response.content_type or "image/jpeg"
             images_created_for_slide = 0
 
@@ -133,8 +134,8 @@ Genera la estructura del carrusel en JSON:
                         file_key=upload.key,
                         file_size_bytes=upload.size_bytes,
                         mime_type=content_type,
-                        width=image_width,
-                        height=image_height,
+                        width=rendered_width,
+                        height=rendered_height,
                         position=slide["slide_number"] - 1,
                         generation_prompt=visual_prompt,
                         generation_params={
@@ -167,8 +168,8 @@ Genera la estructura del carrusel en JSON:
                         file_key=upload.key,
                         file_size_bytes=upload.size_bytes,
                         mime_type=content_type,
-                        width=image_width,
-                        height=image_height,
+                        width=rendered_width,
+                        height=rendered_height,
                         position=slide["slide_number"] - 1,
                         generation_prompt=visual_prompt,
                         generation_params={

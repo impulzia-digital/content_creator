@@ -142,6 +142,14 @@ _CATALOG: list[ModelEntry] = [
     ModelEntry(
         provider="openai",
         capability="image",
+        value="gpt-image-2",
+        label="GPT Image 2",
+        tier="Potente",
+        description="Última generación de OpenAI para imagen, con mejor fidelidad y composición.",
+    ),
+    ModelEntry(
+        provider="openai",
+        capability="image",
         value="gpt-image-1.5",
         label="GPT Image 1.5",
         tier="Potente",

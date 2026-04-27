@@ -3,7 +3,7 @@ import uuid
 from django.conf import settings
 from django.db import models
 
-from apps.common.models import TimeStampedModel
+from apps.common.models import TimeStampedModel, next_creation_order
 
 
 class ApprovalRequest(TimeStampedModel):
@@ -19,6 +19,7 @@ class ApprovalRequest(TimeStampedModel):
         CHANGES_REQUESTED = "changes_requested", "Cambios solicitados"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_order = models.BigIntegerField(default=next_creation_order, editable=False, db_index=True)
     variant = models.ForeignKey(
         "content.ContentVariant",
         on_delete=models.CASCADE,
@@ -45,7 +46,7 @@ class ApprovalRequest(TimeStampedModel):
     notes = models.TextField(blank=True, help_text="Feedback del aprobador")
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-created_at", "-created_order"]
 
     def __str__(self):
         return f"Aprobación {self.get_decision_display()} — {self.variant}"

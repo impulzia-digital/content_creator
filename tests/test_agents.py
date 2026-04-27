@@ -389,6 +389,55 @@ class TestImageAgent:
         assert asset.generation_params["_image_generation"]["model"] == "gpt-image-1"
 
     @pytest.mark.asyncio
+    async def test_execute_uses_resolution_override(self, agent, enriched_brief, brand, variant):
+        enriched_brief.ai_provider_overrides = {
+            "image": {
+                "default": {"resolution_preset": "2k", "width": 2048, "height": 1152}
+            }
+        }
+        await enriched_brief.asave(update_fields=["ai_provider_overrides"])
+
+        prompt_response = TextGenerationResponse(
+            text=json.dumps({
+                "image_prompt": "A wide cinematic dashboard",
+                "negative_prompt": "blurry",
+            }),
+            model="gpt-4o-mini",
+            cost_usd=0.0001,
+        )
+        image_response = ImageGenerationResponse(
+            image_urls=["https://oai.example.com/generated.jpg"],
+            model="gpt-image-2",
+            cost_usd=0.04,
+            width=2048,
+            height=1152,
+        )
+        upload_result = UploadResult(
+            url="https://cdn.example.com/img.jpg",
+            key="brands/test/content/abc/img.jpg",
+            size_bytes=150000,
+        )
+
+        ctx = AgentContext(brief=enriched_brief, brand=brand, variant=variant)
+
+        mock_text = AsyncMock()
+        mock_text.generate.return_value = prompt_response
+        mock_image = AsyncMock()
+        mock_image.generate.return_value = image_response
+
+        with patch.object(agent, "resolve_text_generation", side_effect=_mock_text_resolution(agent, mock_text, _resolved_text())), \
+            patch.object(agent, "resolve_image_generation", side_effect=_mock_image_resolution(agent, mock_image, _resolved_image(model="gpt-image-2"))), \
+            patch("apps.agents.image_agent.get_storage_provider") as mock_storage:
+            mock_storage.return_value = AsyncMock(upload_from_url=AsyncMock(return_value=upload_result))
+
+            result = await agent.execute(ctx)
+
+        assert result.success is True
+        request = mock_image.generate.await_args.args[0]
+        assert request.width == 2048
+        assert request.height == 1152
+
+    @pytest.mark.asyncio
     async def test_execute_creates_asset_from_image_bytes(self, agent, enriched_brief, brand, variant):
         from apps.assets.models import Asset
 
@@ -550,6 +599,72 @@ class TestCarouselAgent:
         assert result.success is True
         assert result.data["num_slides"] == 3
         assert await Asset.objects.filter(variant=variant).acount() == 3
+
+    @pytest.mark.asyncio
+    async def test_execute_uses_resolution_override(self, agent, carousel_brief, brand):
+        carousel_brief.enriched_brief = {"tema": "Testing", "angulo": "Guía"}
+        carousel_brief.aspect_ratio = "16:9"
+        carousel_brief.ai_provider_overrides = {
+            "image": {
+                "default": {"resolution_preset": "2k", "width": 2048, "height": 1152}
+            }
+        }
+        await carousel_brief.asave(update_fields=["enriched_brief", "aspect_ratio", "ai_provider_overrides"])
+
+        variant = await ContentVariant.objects.acreate(brief=carousel_brief, version=1)
+
+        carousel_structure = {
+            "slides": [
+                {
+                    "slide_number": 1,
+                    "slide_type": "contenido",
+                    "headline": "Slide 1",
+                    "body": "Body",
+                    "visual_description": "A slide",
+                    "design_notes": "clean",
+                }
+            ],
+            "visual_style": "modern",
+            "color_scheme": "blue",
+        }
+
+        structure_response = TextGenerationResponse(
+            text=json.dumps(carousel_structure),
+            model="gpt-4o",
+            cost_usd=0.003,
+        )
+        image_response = ImageGenerationResponse(
+            image_bytes=[b"slide-image"],
+            model="gpt-image-2",
+            cost_usd=0.04,
+            width=2048,
+            height=1152,
+            content_type="image/jpeg",
+        )
+        upload_result = UploadResult(
+            url="https://cdn.example.com/slide.jpg",
+            key="slide.jpg",
+            size_bytes=100000,
+        )
+
+        ctx = AgentContext(brief=carousel_brief, brand=brand, variant=variant)
+
+        mock_text = AsyncMock()
+        mock_text.generate.return_value = structure_response
+        mock_image = AsyncMock()
+        mock_image.generate.return_value = image_response
+
+        with patch.object(agent, "resolve_text_generation", side_effect=_mock_text_resolution(agent, mock_text, _resolved_text(model="gpt-4o"))), \
+            patch.object(agent, "resolve_image_generation", side_effect=_mock_image_resolution(agent, mock_image, _resolved_image(model="gpt-image-2"))), \
+            patch("apps.agents.carousel_agent.get_storage_provider") as mock_storage:
+            mock_storage.return_value = AsyncMock(upload_bytes=AsyncMock(return_value=upload_result))
+
+            result = await agent.execute(ctx)
+
+        assert result.success is True
+        request = mock_image.generate.await_args.args[0]
+        assert request.width == 2048
+        assert request.height == 1152
 
 
 # ── VideoAgent ────────────────────────────────────────────────

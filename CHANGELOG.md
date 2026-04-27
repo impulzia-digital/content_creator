@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-04-27
+
+- OpenAI Image pasa a usar `gpt-image-2` por defecto, se añade al catálogo y el provider soporta normalización flexible de tamaños válidos con estimación de coste para resoluciones 2K/4K.
+- El formulario de briefs incorpora presets visibles de resolución para imagen (`1K`, `2K`, `4K`), persistidos como overrides de `width`/`height` y consumidos por `ImageAgent` y `CarouselAgent`.
+- Se endurece el ordenamiento y el cálculo de la última generación visible con una secuencia estable de creación en `ApprovalRequest`, `ContentBrief` y `AgentRun`, eliminando fallos por empates de `created_at` en SQLite.
+
 ## 2026-04-15
 
 - Documentación de integración con Canva Connect API añadida en `docs/canva-integration/`: guía completa, plan de implementación en 4 fases (Ruta Canva + Ruta Híbrida) y checklist de prerequisitos. Pendiente de cuenta Enterprise para implementar.

@@ -15,16 +15,8 @@ from apps.agents.base import AgentContext, AgentResult, BaseAgent
 from apps.assets.models import Asset
 from apps.content.models import AgentRun
 from apps.integrations.base import ImageGenerationRequest, TextGenerationRequest
+from apps.integrations.image_dimensions import DEFAULT_IMAGE_DIMENSIONS_BY_ASPECT as ASPECT_RATIOS
 from apps.integrations.registry import get_storage_provider
-
-
-# Aspect ratio → dimensiones
-ASPECT_RATIOS = {
-    "1:1": (1080, 1080),
-    "4:5": (1080, 1350),
-    "9:16": (1080, 1920),
-    "16:9": (1920, 1080),
-}
 
 
 class ImageAgent(BaseAgent):
@@ -83,7 +75,7 @@ Genera un prompt de imagen detallado en JSON:
         prompt_data = await self.parse_output(prompt_response.text, context)
 
         # Paso 2: Generar imagen
-        w, h = ASPECT_RATIOS.get(context.brief.aspect_ratio, (1080, 1350))
+        w, h = self.resolve_image_dimensions(context)
         image_response = await image_provider.generate(
             ImageGenerationRequest(
                 prompt=prompt_data["image_prompt"],

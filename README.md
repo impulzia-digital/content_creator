@@ -11,7 +11,7 @@ impulsado por sub-agentes de IA (OpenAI o Gemini) con orquestación Celery.
 | Tasks | Celery + Redis (3 queues) |
 | DB | PostgreSQL 16 |
 | IA Texto | OpenAI GPT-4o / GPT-4o-mini o Gemini 2.5 |
-| IA Imágenes | OpenAI gpt-image-1 / DALL-E 3 o Gemini Image |
+| IA Imágenes | OpenAI gpt-image-2 / gpt-image-1 / DALL-E 3 o Gemini Image |
 | Storage | S3-compatible (Cloudflare R2) |
 | Publishing | Meta Graph API v21.0 |
 | Frontend | Django Templates + HTMX + Tailwind |
@@ -96,7 +96,7 @@ Los 3 servicios (web, worker, beat) se despliegan desde el mismo Docker image.
 - `IMAGE_PROVIDER`: `openai`, `gemini` o `imagen`
 - Las marcas pueden definir defaults por agente en `ai_provider_defaults`
 - Los briefs pueden sobrescribir texto e imagen en `ai_provider_overrides`
-- Variables sugeridas para modelos base: `OPENAI_TEXT_MODEL`, `OPENAI_REASONING_MODEL`, `OPENAI_IMAGE_MODEL`, `GEMINI_TEXT_MODEL`, `GEMINI_REASONING_MODEL`, `GEMINI_IMAGE_MODEL`, `IMAGEN_MODEL`
+- Variables sugeridas para modelos base: `OPENAI_TEXT_MODEL`, `OPENAI_REASONING_MODEL`, `OPENAI_IMAGE_MODEL` (default `gpt-image-2`), `GEMINI_TEXT_MODEL`, `GEMINI_REASONING_MODEL`, `GEMINI_IMAGE_MODEL`, `IMAGEN_MODEL`
 
 ## Estructura
 

@@ -323,6 +323,29 @@ class TestBriefCreateView:
         assert brief.ai_provider_overrides["image"]["default"]["provider"] == "imagen"
         assert brief.ai_provider_overrides["image"]["default"]["model"] == "imagen-4.0-generate-001"
 
+    def test_post_with_image_resolution_preset(self, client, brand, user, membership):
+        client.force_login(user)
+        session = client.session
+        session["active_brand_id"] = brand.pk
+        session.save()
+
+        response = client.post(reverse("content:brief_create"), {
+            "title": "Test resolution preset",
+            "raw_idea": "Testing image resolution preset",
+            "content_type": "post",
+            "aspect_ratio": "16:9",
+            "num_slides": "1",
+            "priority": "5",
+            "image_resolution_preset": "2k",
+        })
+
+        assert response.status_code == 302
+        brief = ContentBrief.objects.get(title="Test resolution preset")
+        image_defaults = brief.ai_provider_overrides["image"]["default"]
+        assert image_defaults["resolution_preset"] == "2k"
+        assert image_defaults["width"] == 2048
+        assert image_defaults["height"] == 1152
+
     def test_post_with_custom_model(self, client, brand, user, membership):
         client.force_login(user)
         session = client.session

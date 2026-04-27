@@ -122,6 +122,17 @@
             class="w-full rounded-lg border-gray-300"
             placeholder="Ej: {{ default_image_model }}">
         </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-700 mb-1">Resolución</label>
+          <select name="image_resolution_preset" class="w-full rounded-lg border-gray-300">
+            {% for val, label in image_resolution_choices %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+          <p class="mt-1 text-[11px] text-gray-500">
+            El tamaño exacto se calcula según el aspecto elegido. 4K usa el máximo práctico por formato.
+          </p>
+        </div>
       </div>
 
       {# ── Video ── #}

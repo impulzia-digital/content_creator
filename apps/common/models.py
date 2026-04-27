@@ -2,6 +2,11 @@ import uuid
 from django.db import models
 
 
+def next_creation_order() -> int:
+    """Monotonic-ish timestamp from UUID1 for deterministic tie-breaking."""
+    return uuid.uuid1().time
+
+
 class TimeStampedModel(models.Model):
     """Abstract base con created_at / updated_at."""
 

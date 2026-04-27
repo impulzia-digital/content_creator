@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
-from apps.common.models import TimeStampedModel, BrandScopedManager
+from apps.common.models import TimeStampedModel, BrandScopedManager, next_creation_order
 
 
 class ContentBrief(TimeStampedModel):
@@ -32,6 +32,7 @@ class ContentBrief(TimeStampedModel):
         STORY = "story", "Story"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_order = models.BigIntegerField(default=next_creation_order, editable=False, db_index=True)
     brand = models.ForeignKey(
         "brands.Brand", on_delete=models.CASCADE, related_name="briefs"
     )
@@ -95,7 +96,7 @@ class ContentBrief(TimeStampedModel):
     objects = BrandScopedManager()
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-created_at", "-created_order"]
         constraints = [
             models.UniqueConstraint(
                 fields=["brand", "seed_key"],
@@ -115,12 +116,12 @@ class ContentBrief(TimeStampedModel):
         latest_enricher = self.agent_runs.filter(
             agent_type=AgentRun.AgentType.BRIEF_ENRICHER,
             status=AgentRun.RunStatus.SUCCESS,
-        ).first()
+        ).order_by("-created_at", "-created_order").first()
         if not latest_enricher:
             return Decimal("0")
 
         total = self.agent_runs.filter(
-            created_at__gte=latest_enricher.created_at,
+            created_order__gte=latest_enricher.created_order,
             status=AgentRun.RunStatus.SUCCESS,
         ).aggregate(total=models.Sum("cost_usd"))["total"]
         return total or Decimal("0")
@@ -132,7 +133,7 @@ class ContentBrief(TimeStampedModel):
         if selected_variant and selected_variant.generation_cost_usd:
             return selected_variant.generation_cost_usd
 
-        latest_variant = self.variants.order_by("-version", "-created_at").first()
+        latest_variant = self.variants.order_by("-version", "-created_at", "-created_order").first()
         if latest_variant and latest_variant.generation_cost_usd:
             return latest_variant.generation_cost_usd
 
@@ -149,6 +150,7 @@ class ContentVariant(TimeStampedModel):
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_order = models.BigIntegerField(default=next_creation_order, editable=False, db_index=True)
     brief = models.ForeignKey(
         ContentBrief, on_delete=models.CASCADE, related_name="variants"
     )
@@ -216,6 +218,7 @@ class AgentRun(TimeStampedModel):
         RETRYING = "retrying", "Reintentando"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    created_order = models.BigIntegerField(default=next_creation_order, editable=False, db_index=True)
     brief = models.ForeignKey(
         ContentBrief, on_delete=models.CASCADE, related_name="agent_runs"
     )
@@ -247,7 +250,7 @@ class AgentRun(TimeStampedModel):
     max_attempts = models.PositiveSmallIntegerField(default=3)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering = ["-created_at", "-created_order"]
         indexes = [
             models.Index(fields=["brief", "agent_type"]),
             models.Index(fields=["status"]),
